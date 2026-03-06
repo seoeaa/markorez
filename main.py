@@ -20,6 +20,73 @@ from constants import COLORS, THUMB_SIZE, MAX_DIM
 from canvas_widget import StampCanvas
 
 
+class HelpWindow(ctk.CTkToplevel):
+    """Кастомное окно справки в стиле приложения."""
+    def __init__(self, master, title, text):
+        super().__init__(master)
+        self.title(title)
+        
+        # Центрирование окна относительно родителя
+        width, height = 480, 360
+        x = master.winfo_x() + (master.winfo_width() // 2) - (width // 2)
+        y = master.winfo_y() + (master.winfo_height() // 2) - (height // 2)
+        self.geometry(f"{width}x{height}+{x}+{y}")
+        
+        self.resizable(True, True)
+        self.minsize(400, 300)
+        
+        # Поверх всех окон
+        self.after(100, lambda: self.focus_force())
+        self.attributes("-topmost", True)
+        
+        # Фрейм с отступами
+        main_frame = ctk.CTkFrame(self)
+        main_frame.pack(fill="both", expand=True, padx=15, pady=15)
+        
+        # Заголовок с иконкой
+        header_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        header_frame.pack(fill="x", padx=10, pady=(10, 5))
+        
+        icon_label = ctk.CTkLabel(header_frame, text="💡", font=ctk.CTkFont(size=32))
+        icon_label.pack(side="left", padx=(0, 15))
+        
+        title_label = ctk.CTkLabel(
+            header_frame, 
+            text=title, 
+            font=ctk.CTkFont(size=20, weight="bold"),
+            justify="left",
+            anchor="w"
+        )
+        title_label.pack(side="left", fill="x", expand=True)
+        
+        # Разделяем на заголовок и тело для текстового поля
+        parts = text.split("\n", 1)
+        body_text = parts[1].strip() if len(parts) > 1 else ""
+
+        # Текстовое поле для тела
+        self.text_info = ctk.CTkTextbox(
+            main_frame, 
+            font=ctk.CTkFont(size=14.5),
+            fg_color="transparent",
+            wrap="word",
+            padx=10,
+            pady=10
+        )
+        self.text_info.pack(fill="both", expand=True, pady=(5, 10))
+        self.text_info.insert("0.0", body_text)
+        self.text_info.configure(state="disabled")
+        
+        # Кнопка закрытия
+        btn_close = ctk.CTkButton(
+            self, 
+            text="OK", 
+            command=self.destroy, 
+            width=120,
+            height=32,
+            font=ctk.CTkFont(weight="bold")
+        )
+        btn_close.pack(pady=(0, 15))
+
 
 class MarkorezApp(ctk.CTk):
     """Главное окно приложения Маркорез."""
@@ -377,16 +444,6 @@ class MarkorezApp(ctk.CTk):
         content = ctk.CTkFrame(card, fg_color="transparent")
         content.pack(fill="x", padx=16, pady=14)
 
-        ctk.CTkLabel(content, text=_("tab_how_it_works"),
-                     font=ctk.CTkFont(size=12, weight="bold"),
-                     text_color=COLORS["blue_text"]).pack(anchor="w", pady=(0, 4))
-
-        ctk.CTkLabel(content,
-                     text=_("lbl_how_it_works_desc"),
-                     font=ctk.CTkFont(size=11),
-                     text_color=COLORS["blue_text"],
-                     justify="left").pack(anchor="w", pady=(0, 10))
-
         # Ссылки
         gh_btn = ctk.CTkButton(
             content, text=_("btn_github"),
@@ -602,11 +659,10 @@ class MarkorezApp(ctk.CTk):
 
     def _show_help(self, key):
         """Показывает информационное окно с описанием настройки."""
-        import tkinter.messagebox as messagebox
-        # Мы используем кастомное окно или стандартный messagebox
-        # Но чтобы было красиво в стиле приложения, можно было бы сделать CTkMessagebox, 
-        # но для начала хватит и стандартного info.
-        messagebox.showinfo(_("tab_how_it_works"), _(key))
+        full_text = _(key)
+        # В качестве заголовка окна используем первую строку текста (название настройки)
+        win_title = full_text.split("\n")[0]
+        HelpWindow(self, win_title, full_text)
 
     def _on_auto_threshold_changed(self):
         """Переключение авто/ручного порога."""
