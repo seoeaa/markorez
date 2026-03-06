@@ -387,13 +387,22 @@ class MarkorezApp(ctk.CTk):
 
         # Ссылки
         gh_btn = ctk.CTkButton(
-            content, text="🌐  Проверить обновления (GitHub)",
+            content, text="🌐  Проект на GitHub",
             font=ctk.CTkFont(size=11, weight="bold"),
             fg_color="#3b82f6", hover_color="#2563eb",
             height=28,
             command=lambda: webbrowser.open("https://github.com/seoeaa/markorez")
         )
         gh_btn.pack(fill="x", pady=(0, 6))
+
+        gh_releases_btn = ctk.CTkButton(
+            content, text="📦  Скачать обновления (Релизы)",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color="#10b981", hover_color="#059669",
+            height=28,
+            command=lambda: webbrowser.open("https://github.com/seoeaa/markorez/releases")
+        )
+        gh_releases_btn.pack(fill="x", pady=(0, 6))
 
         tg_btn = ctk.CTkButton(
             content, text="💬  Связаться в Telegram",
