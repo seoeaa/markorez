@@ -6,8 +6,9 @@
 ![GUI](https://img.shields.io/badge/GUI-CustomTkinter-green.svg)
 ![OpenCV](https://img.shields.io/badge/Image%20Processing-OpenCV-orange.svg)
 
-[English version](README_en.md)
-| [Русская версия](README.md)
+---
+**Русская версия** | [English version](README_en.md)
+---
 
 ## 📄 Описание
 

@@ -6,7 +6,9 @@ A smart tool for automatic searching and cropping of postage stamps from scans.
 ![GUI](https://img.shields.io/badge/GUI-CustomTkinter-green.svg)
 ![OpenCV](https://img.shields.io/badge/Image%20Processing-OpenCV-orange.svg)
 
-[Russian version / Русская версия](README.md)
+---
+[Русская версия](README.md) | **English version**
+---
 
 ## 📄 Description
 
