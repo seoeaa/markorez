@@ -346,9 +346,11 @@ class StampEditorWindow(ctk.CTkToplevel):
                 angle -= 90
                 rw, rh = rh, rw
                 
-            # Небольшой отступ внутрь, чтобы не захватить фон (уменьшаем на 2%)
-            rw *= 0.98
-            rh *= 0.98
+            # Добавим небольшой внешний отступ (пару пикселей с каждой стороны), 
+            # чтобы рамка не обрезала края самой марки
+            padding_pixels = 6
+            rw += padding_pixels
+            rh += padding_pixels
             
             # Центрируем и сохраняем
             self.frame_x = cx - rw/2
