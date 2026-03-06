@@ -151,7 +151,6 @@ def process_image(
     image: np.ndarray,
     threshold: int = -1,
     min_area: int = 5000,
-    blur_radius: int = 3,
     invert: bool = False,
     pad: int = 0
 ) -> list[BoundingBox]:

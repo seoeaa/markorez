@@ -47,7 +47,6 @@ class MarkorezApp(ctk.CTk):
         self.use_auto_threshold = ctk.BooleanVar(value=True)
         self.threshold_var = ctk.IntVar(value=128)
         self.min_area_var = ctk.IntVar(value=5000)
-        self.blur_radius_var = ctk.IntVar(value=3)
         self.invert_var = ctk.BooleanVar(value=False)
         self.padding_var = ctk.IntVar(value=20)
 
@@ -159,6 +158,16 @@ class MarkorezApp(ctk.CTk):
                                             text_color=COLORS["text_secondary"])
         self.threshold_label.pack(side="right", padx=(0, 8))
 
+        # Кнопка помощи для чувствительности
+        help_btn = ctk.CTkButton(thresh_header, text="?", width=18, height=18,
+                                 corner_radius=9, font=ctk.CTkFont(size=11, weight="bold"),
+                                 fg_color="transparent", border_width=1,
+                                 border_color=COLORS["border"],
+                                 text_color=COLORS["text_secondary"],
+                                 hover_color=COLORS["blue_light"],
+                                 command=lambda: self._show_help("help_thresh"))
+        help_btn.pack(side="left", padx=6)
+
         self.threshold_slider = ctk.CTkSlider(content, from_=0, to=255,
                                               variable=self.threshold_var,
                                               command=lambda v: self._update_slider_label(
@@ -171,11 +180,7 @@ class MarkorezApp(ctk.CTk):
 
         # Мин. площадь
         self._add_slider(content, _("lbl_min_area").split("(")[0].strip(), self.min_area_var,
-                         1000, 50000, "area_label", suffix="px²")
-
-        # Радиус дилатации
-        self._add_slider(content, _("lbl_dilate").split("(")[0].strip(), self.blur_radius_var,
-                         0, 10, "blur_label", suffix="px")
+                         1000, 50000, "area_label", suffix="px²", help_key="help_min_area")
 
         # Инверсия
         ctk.CTkCheckBox(content, text=_("lbl_invert"), variable=self.invert_var,
@@ -558,13 +563,23 @@ class MarkorezApp(ctk.CTk):
     # ═══════════════════════════════════════════════════════════════════
 
     def _add_slider(self, parent, label_text, variable, min_val, max_val,
-                    label_attr, suffix=""):
+                    label_attr, suffix="", help_key=None):
         """Добавить слайдер с меткой."""
         header = ctk.CTkFrame(parent, fg_color="transparent")
         header.pack(fill="x", pady=(8, 2))
 
         ctk.CTkLabel(header, text=label_text, font=ctk.CTkFont(size=13),
                      text_color=COLORS["text"]).pack(side="left")
+
+        if help_key:
+            help_btn = ctk.CTkButton(header, text="?", width=18, height=18,
+                                     corner_radius=9, font=ctk.CTkFont(size=11, weight="bold"),
+                                     fg_color="transparent", border_width=1,
+                                     border_color=COLORS["border"],
+                                     text_color=COLORS["text_secondary"],
+                                     hover_color=COLORS["blue_light"],
+                                     command=lambda: self._show_help(help_key))
+            help_btn.pack(side="left", padx=6)
 
         val_label = ctk.CTkLabel(header, text=f"{variable.get()}{suffix}",
                                  font=ctk.CTkFont(family="Courier", size=11),
@@ -584,6 +599,14 @@ class MarkorezApp(ctk.CTk):
 
     def _update_slider_label(self, label, value):
         label.configure(text=str(value))
+
+    def _show_help(self, key):
+        """Показывает информационное окно с описанием настройки."""
+        import tkinter.messagebox as messagebox
+        # Мы используем кастомное окно или стандартный messagebox
+        # Но чтобы было красиво в стиле приложения, можно было бы сделать CTkMessagebox, 
+        # но для начала хватит и стандартного info.
+        messagebox.showinfo(_("tab_how_it_works"), _(key))
 
     def _on_auto_threshold_changed(self):
         """Переключение авто/ручного порога."""
@@ -697,7 +720,6 @@ class MarkorezApp(ctk.CTk):
                     proc_image,
                     threshold=threshold,
                     min_area=max(100, scaled_min_area),
-                    blur_radius=self.blur_radius_var.get(),
                     invert=self.invert_var.get(),
                     pad=int(self.padding_var.get() * scale)
                 )
