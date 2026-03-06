@@ -188,14 +188,25 @@ class MarkorezApp(ctk.CTk):
         sep = ctk.CTkFrame(content, height=1, fg_color=COLORS["border"])
         sep.pack(fill="x", pady=(0, 12))
 
-        # Кнопка обработки
-        self.process_btn = ctk.CTkButton(
-            content, text=_("btn_find_cut"), height=40,
+        # Кнопки поиска и разделения
+        btn_row = ctk.CTkFrame(content, fg_color="transparent")
+        btn_row.pack(fill="x")
+        
+        self.find_btn = ctk.CTkButton(
+            btn_row, text=_("btn_find"), height=40,
             font=ctk.CTkFont(size=14, weight="bold"),
             fg_color=COLORS["accent"], hover_color=COLORS["accent_hover"],
-            command=self._handle_process
+            command=self._handle_find
         )
-        self.process_btn.pack(fill="x")
+        self.find_btn.pack(side="left", expand=True, fill="x", padx=(0, 4))
+        
+        self.divide_btn = ctk.CTkButton(
+            btn_row, text=_("btn_divide"), height=40,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            fg_color=COLORS["dark"], hover_color=COLORS["dark_hover"],
+            command=self._extract_stamps
+        )
+        self.divide_btn.pack(side="left", expand=True, fill="x", padx=(4, 0))
 
     def _build_manual_tools_panel(self, parent):
         """Панель ручных инструментов."""
@@ -240,32 +251,8 @@ class MarkorezApp(ctk.CTk):
         self._add_slider(content, _("lbl_padding").split("(")[0].strip(), self.padding_var,
                          0, 100, "padding_label", suffix="px")
 
-        # Разделитель
-        sep = ctk.CTkFrame(content, height=1, fg_color=COLORS["border"])
-        sep.pack(fill="x", pady=(4, 8))
-
-        # Кнопки очистить / извлечь
-        btn_frame = ctk.CTkFrame(content, fg_color="transparent")
-        btn_frame.pack(fill="x")
-
-        self.clear_btn = ctk.CTkButton(
-            btn_frame, text=_("btn_clear"), height=34,
-            font=ctk.CTkFont(size=12),
-            fg_color=COLORS["card"], hover_color=COLORS["red_light"],
-            text_color=COLORS["text"],
-            border_width=1, border_color=COLORS["border"],
-            command=self._clear_boxes
-        )
-        self.clear_btn.pack(side="left", expand=True, fill="x", padx=(0, 4))
-
-        self.extract_btn = ctk.CTkButton(
-            btn_frame, text=_("btn_extract_imgs"), height=34,
-            font=ctk.CTkFont(size=12),
-            fg_color=COLORS["dark"], hover_color=COLORS["dark_hover"],
-            text_color="white",
-            command=self._extract_stamps
-        )
-        self.extract_btn.pack(side="left", expand=True, fill="x", padx=(4, 0))
+        # Разделитель удален, кнопки перенесены
+        pass
 
     def _build_caption_format_toolbar(self, parent):
         """Панель инструментов форматирования подписи как в текстовом редакторе."""
@@ -471,6 +458,17 @@ class MarkorezApp(ctk.CTk):
         )
         self.change_photo_btn.place(relx=1.0, rely=0.0, x=-16, y=16, anchor="ne")
 
+        # Кнопка Очистить (под Сменить фото)
+        self.main_clear_btn = ctk.CTkButton(
+            self.canvas_container, text=_("btn_clear"), width=120, height=32,
+            font=ctk.CTkFont(size=12),
+            fg_color=COLORS["card"], hover_color=COLORS["red_light"],
+            text_color=COLORS["text"],
+            border_width=1, border_color=COLORS["border"],
+            command=self._clear_boxes
+        )
+        self.main_clear_btn.place(relx=1.0, rely=0.0, x=-16, y=56, anchor="ne")
+
         # Статус-бар (количество найденных рамок)
         self.status_bar = ctk.CTkFrame(self.canvas_card, height=36, fg_color=COLORS["dark"],
                                        corner_radius=0)
@@ -674,12 +672,12 @@ class MarkorezApp(ctk.CTk):
     #  Логика обработки
     # ═══════════════════════════════════════════════════════════════════
 
-    def _handle_process(self):
-        """Запуск автоматического поиска марок."""
+    def _handle_find(self):
+        """Запуск автоматического поиска марок (без разделения)."""
         if self.original_image is None:
             return
 
-        self.process_btn.configure(text=_("btn_processing"), state="disabled")
+        self.find_btn.configure(text=_("btn_processing"), state="disabled")
 
         def process():
             try:
@@ -720,12 +718,11 @@ class MarkorezApp(ctk.CTk):
                     ))
 
                 self.after(0, lambda: self.canvas.set_bounding_boxes(original_boxes))
-                self._extract_stamps()
             except Exception as e:
                 print(_("err_processing", error=e))
             finally:
-                self.after(0, lambda: self.process_btn.configure(
-                    text=_("btn_find_cut"), state="normal"))
+                self.after(0, lambda: self.find_btn.configure(
+                    text=_("btn_find"), state="normal"))
 
         threading.Thread(target=process, daemon=True).start()
 
@@ -801,8 +798,15 @@ class MarkorezApp(ctk.CTk):
             num_label = ctk.CTkLabel(bottom, text=f"#{i+1}",
                                      font=ctk.CTkFont(family="Courier", size=11, weight="bold"),
                                      text_color=COLORS["text_secondary"])
-            num_label.pack(expand=True)
+            num_label.pack(side="left", padx=8)
             num_label.bind("<Button-1>", lambda e, idx=i: self._select_stamp(idx))
+
+            # Кнопка удаления (корзина)
+            del_btn = ctk.CTkLabel(bottom, text="🗑️", cursor="hand2",
+                                   font=ctk.CTkFont(size=14),
+                                   text_color="#ef4444")
+            del_btn.pack(side="right", padx=8)
+            del_btn.bind("<Button-1>", lambda e, idx=i: self._delete_stamp(idx))
 
         # Автоматически выбрать первую марку (отключено)
         # if self.extracted_stamps:
@@ -856,6 +860,14 @@ class MarkorezApp(ctk.CTk):
                 child.image = ctk_img # Сохраняем ссылку
                 self.stamp_thumbnails[index] = ctk_img
                 break
+
+    def _delete_stamp(self, index: int):
+        """Удалить конкретную марку из результатов."""
+        if 0 <= index < len(self.extracted_stamps):
+            self.extracted_stamps.pop(index)
+            if index < len(self.stamp_captions):
+                self.stamp_captions.pop(index)
+            self._update_results_gallery()
 
     def _clear_boxes(self):
         """Очистить все рамки."""
