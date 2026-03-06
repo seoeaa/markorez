@@ -229,9 +229,9 @@ class MarkorezApp(ctk.CTk):
         help_btn = ctk.CTkButton(thresh_header, text="?", width=18, height=18,
                                  corner_radius=9, font=ctk.CTkFont(size=11, weight="bold"),
                                  fg_color="transparent", border_width=1,
-                                 border_color=COLORS["border"],
-                                 text_color=COLORS["text_secondary"],
-                                 hover_color=COLORS["blue_light"],
+                                 border_color=COLORS["accent"],
+                                 text_color=COLORS["accent"],
+                                 hover_color=COLORS["accent_light"],
                                  command=lambda: self._show_help("help_thresh"))
         help_btn.pack(side="left", padx=6)
 
@@ -532,8 +532,8 @@ class MarkorezApp(ctk.CTk):
         self.status_bar = ctk.CTkFrame(self.canvas_card, height=36, fg_color=COLORS["dark"],
                                        corner_radius=0)
         self.status_label = ctk.CTkLabel(self.status_bar, text="",
-                                         font=ctk.CTkFont(family="Courier", size=12),
-                                         text_color="#a1a1aa")
+                                         font=ctk.CTkFont(family="Courier", size=12, weight="bold"),
+                                         text_color="white")
         self.status_label.pack(side="left", padx=16)
 
     def _on_canvas_updated(self, box_count: int):
@@ -632,9 +632,9 @@ class MarkorezApp(ctk.CTk):
             help_btn = ctk.CTkButton(header, text="?", width=18, height=18,
                                      corner_radius=9, font=ctk.CTkFont(size=11, weight="bold"),
                                      fg_color="transparent", border_width=1,
-                                     border_color=COLORS["border"],
-                                     text_color=COLORS["text_secondary"],
-                                     hover_color=COLORS["blue_light"],
+                                     border_color=COLORS["accent"],
+                                     text_color=COLORS["accent"],
+                                     hover_color=COLORS["accent_light"],
                                      command=lambda: self._show_help(help_key))
             help_btn.pack(side="left", padx=6)
 
