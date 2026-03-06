@@ -12,6 +12,7 @@ import os
 import threading
 
 import image_utils
+import webbrowser
 from image_utils import BoundingBox, process_image, detect_dark_background, render_stamp_with_caption
 from editor_window import StampEditorWindow
 from constants import COLORS, THUMB_SIZE, MAX_DIM
@@ -36,7 +37,7 @@ class MarkorezApp(ctk.CTk):
         # Состояние приложения
         self.original_image: np.ndarray | None = None
         self.extracted_stamps: list[np.ndarray] = []
-        self.stamp_thumbnails: list[ImageTk.PhotoImage] = []
+        self.stamp_thumbnails: list[ctk.CTkImage] = []
         self.stamp_captions: list[str] = []  # Подписи к маркам
         self.selected_stamp_index: int = -1  # Индекс выбранной марки
         self.image_path: str = ""
@@ -351,15 +352,15 @@ class MarkorezApp(ctk.CTk):
             
         # Масштабирование для превью
         rendered_img.thumbnail((150, 150), Image.Resampling.LANCZOS)
-        tk_img = ImageTk.PhotoImage(rendered_img)
-        self.stamp_thumbnails[idx] = tk_img
+        ctk_img = ctk.CTkImage(light_image=rendered_img, dark_image=rendered_img, size=rendered_img.size)
+        self.stamp_thumbnails[idx] = ctk_img
         
         # Обновить Label в галерее
         # Label является вторым ребенком во frame (первым был - нет, это Label img_label)
         frame = self.stamp_frames[idx]
         for child in frame.winfo_children():
             if isinstance(child, ctk.CTkLabel) and child.cget("text") == "":
-                child.configure(image=tk_img)
+                child.configure(image=ctk_img)
                 break
 
     def _build_info_panel(self, parent):
@@ -382,7 +383,26 @@ class MarkorezApp(ctk.CTk):
                           "Нажмите Извлечь для обрезки.",
                      font=ctk.CTkFont(size=11),
                      text_color=COLORS["blue_text"],
-                     justify="left").pack(anchor="w")
+                     justify="left").pack(anchor="w", pady=(0, 10))
+
+        # Ссылки
+        gh_btn = ctk.CTkButton(
+            content, text="🌐  Проверить обновления (GitHub)",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color="#3b82f6", hover_color="#2563eb",
+            height=28,
+            command=lambda: webbrowser.open("https://github.com/seoeaa/markorez")
+        )
+        gh_btn.pack(fill="x", pady=(0, 6))
+
+        tg_btn = ctk.CTkButton(
+            content, text="💬  Связаться в Telegram",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color="#0088cc", hover_color="#006699",
+            height=28,
+            command=lambda: webbrowser.open("https://t.me/slaveaa")
+        )
+        tg_btn.pack(fill="x")
 
     def _build_canvas_area(self, parent):
         """Область отображения изображения."""
@@ -661,17 +681,20 @@ class MarkorezApp(ctk.CTk):
                     threshold=threshold,
                     min_area=max(100, scaled_min_area),
                     blur_radius=self.blur_radius_var.get(),
-                    invert=self.invert_var.get()
+                    invert=self.invert_var.get(),
+                    pad=int(self.padding_var.get() * scale)
                 )
 
                 # Пересчитать координаты обратно к оригинальному размеру
                 original_boxes = []
                 for box in boxes:
+                    # Масштабируем центр и размер обратно
+                    orig_center = (box.center[0] / scale, box.center[1] / scale)
+                    orig_size = (box.size[0] / scale, box.size[1] / scale)
                     original_boxes.append(BoundingBox(
-                        int(box.x / scale),
-                        int(box.y / scale),
-                        int(box.width / scale),
-                        int(box.height / scale)
+                        orig_center,
+                        orig_size,
+                        box.angle
                     ))
 
                 self.after(0, lambda: self.canvas.set_bounding_boxes(original_boxes))
@@ -695,13 +718,9 @@ class MarkorezApp(ctk.CTk):
         padding = self.padding_var.get()
         h, w = self.original_image.shape[:2]
 
+        from image_utils import crop_rotated
         for box in self.canvas.bounding_boxes:
-            x1 = max(0, box.x - padding)
-            y1 = max(0, box.y - padding)
-            x2 = min(w, box.x + box.width + padding)
-            y2 = min(h, box.y + box.height + padding)
-
-            stamp = self.original_image[y1:y2, x1:x2].copy()
+            stamp = crop_rotated(self.original_image, box)
             self.extracted_stamps.append(stamp)
 
         # Обновить галерею
@@ -745,10 +764,10 @@ class MarkorezApp(ctk.CTk):
 
             # Масштабирование с сохранением пропорций
             pil_img.thumbnail((THUMB_SIZE, THUMB_SIZE), Image.Resampling.LANCZOS)
-            tk_img = ImageTk.PhotoImage(pil_img)
-            self.stamp_thumbnails.append(tk_img)
+            ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=pil_img.size)
+            self.stamp_thumbnails.append(ctk_img)
 
-            img_label = ctk.CTkLabel(frame, text="", image=tk_img, cursor="hand2")
+            img_label = ctk.CTkLabel(frame, text="", image=ctk_img, cursor="hand2")
             img_label.pack(expand=True, pady=(6, 2))
             img_label.bind("<Button-1>", lambda e, idx=i: self._select_stamp(idx))
 
@@ -810,8 +829,10 @@ class MarkorezApp(ctk.CTk):
         for child in self.stamp_frames[index].winfo_children():
             # Мы знаем, что миниатюра — это Label без текста
             if isinstance(child, ctk.CTkLabel) and not child.cget("text"):
-                child.configure(image=tk_img)
-                child.image = tk_img # Сохраняем ссылку
+                ctk_img = ctk.CTkImage(light_image=img_with_caption, dark_image=img_with_caption, size=img_with_caption.size)
+                child.configure(image=ctk_img)
+                child.image = ctk_img # Сохраняем ссылку
+                self.stamp_thumbnails[index] = ctk_img
                 break
 
     def _clear_boxes(self):

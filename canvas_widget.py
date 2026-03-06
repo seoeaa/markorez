@@ -137,14 +137,14 @@ class StampCanvas(tk.Canvas):
         line_w = max(2, int(disp_w / 400))
 
         for i, box in enumerate(self.bounding_boxes):
-            sx = int(box.x * self.scale_factor)
-            sy = int(box.y * self.scale_factor)
-            sw = int(box.width * self.scale_factor)
-            sh = int(box.height * self.scale_factor)
+            # Точки для изменения размера (всегда 4 угла повернутого прямоугольника)
+            rect_points = box.get_points()
             
-            # Пропускаем некорректные размеры
-            if sw <= 0 or sh <= 0:
-                continue
+            # Точки для отрисовки контура (точный контур, если есть, иначе углы рамки)
+            contour_points = box.get_contour_points() if hasattr(box, 'get_contour_points') else rect_points
+            
+            # Масштабируем точки для отображения
+            disp_contour = [(p[0] * self.scale_factor, p[1] * self.scale_factor) for p in contour_points]
             
             # Цвет рамки: выбранная - синий, обычная - зеленый
             if i == self.selected_box_index:
@@ -152,20 +152,13 @@ class StampCanvas(tk.Canvas):
             else:
                 box_color = "#10b981"  # Зеленый для обычной
 
-            # Рамка
-            for offset in range(line_w):
-                x0 = sx + offset
-                y0 = sy + offset
-                x1 = sx + sw - offset
-                y1 = sy + sh - offset
-                
-                if x1 > x0 and y1 > y0:
-                    draw.rectangle(
-                        [x0, y0, x1, y1],
-                        outline=box_color
-                    )
+            # Рисуем контур (многоугольник)
+            draw.polygon(disp_contour, outline=box_color, width=line_w)
 
-            # Метка номера
+            # Метка номера (рисуем у верхней точки прямоугольника)
+            disp_rect_points = [(p[0] * self.scale_factor, p[1] * self.scale_factor) for p in rect_points]
+            disp_rect_points.sort(key=lambda p: p[1]) # Сортировка по Y
+            sx, sy = disp_rect_points[0]
             label_h = max(16, int(disp_w / 40))
             label_w = max(30, int(disp_w / 20))
             draw.rectangle([sx, sy - label_h, sx + label_w, sy], fill=box_color)
@@ -175,16 +168,10 @@ class StampCanvas(tk.Canvas):
             if i == self.selected_box_index:
                 handle_size = self.handle_size
                 
-                # Угловые маркеры
-                handles = [
-                    (sx, sy, 'nw'),           # Верхний левый
-                    (sx + sw, sy, 'ne'),      # Верхний правый
-                    (sx, sy + sh, 'sw'),      # Нижний левый
-                    (sx + sw, sy + sh, 'se'), # Нижний правый
-                ]
-                
-                for hx, hy, handle_name in handles:
-                    # Рисуем маркер
+                # Угловые маркеры (используются реальные 4 угла повернутого прямоугольника)
+                # Чтобы не менять много логики выделения в других функциях, 
+                # будем рисовать ручки на 4-х углах bounding box.
+                for hx, hy in disp_rect_points:
                     draw.rectangle(
                         [hx - handle_size//2, hy - handle_size//2, 
                          hx + handle_size//2, hy + handle_size//2],
@@ -192,6 +179,7 @@ class StampCanvas(tk.Canvas):
                         outline="white",
                         width=1
                     )
+
 
         # Текущая рамка (в процессе рисования)
         if self.draw_start and self.draw_current:
@@ -233,14 +221,14 @@ class StampCanvas(tk.Canvas):
 
     def _get_box_at_position(self, x, y):
         """Найти рамку по координатам экрана."""
+        # Для повернутых рамок используем проверку попадания точки в многоугольник
         for i in range(len(self.bounding_boxes) - 1, -1, -1):
             box = self.bounding_boxes[i]
-            sx = int(box.x * self.scale_factor)
-            sy = int(box.y * self.scale_factor)
-            sw = int(box.width * self.scale_factor)
-            sh = int(box.height * self.scale_factor)
+            points = box.get_points() # В координатах оригинала
+            # Масштабируем точки
+            disp_points = np.array([(p[0] * self.scale_factor, p[1] * self.scale_factor) for p in points], dtype=np.int32)
             
-            if sx <= x <= sx + sw and sy <= y <= sy + sh:
+            if cv2.pointPolygonTest(disp_points, (x, y), False) >= 0:
                 return i
         return -1
 
@@ -314,10 +302,9 @@ class StampCanvas(tk.Canvas):
                 self.resize_handle = handle
                 self.drag_start = (dx, dy)
                 self.drag_box_start = BoundingBox(
-                    self.bounding_boxes[self.selected_box_index].x,
-                    self.bounding_boxes[self.selected_box_index].y,
-                    self.bounding_boxes[self.selected_box_index].width,
-                    self.bounding_boxes[self.selected_box_index].height
+                    self.bounding_boxes[self.selected_box_index].center,
+                    self.bounding_boxes[self.selected_box_index].size,
+                    self.bounding_boxes[self.selected_box_index].angle
                 )
                 return
         
@@ -329,10 +316,9 @@ class StampCanvas(tk.Canvas):
                 self.is_dragging = True
                 self.drag_start = (dx, dy)
                 self.drag_box_start = BoundingBox(
-                    self.bounding_boxes[box_idx].x,
-                    self.bounding_boxes[box_idx].y,
-                    self.bounding_boxes[box_idx].width,
-                    self.bounding_boxes[box_idx].height
+                    self.bounding_boxes[box_idx].center,
+                    self.bounding_boxes[box_idx].size,
+                    self.bounding_boxes[box_idx].angle
                 )
                 self.redraw()
                 return
@@ -364,35 +350,31 @@ class StampCanvas(tk.Canvas):
             delta_x = int((dx - orig_dx) / self.scale_factor)
             delta_y = int((dy - orig_dy) / self.scale_factor)
             
-            new_box = BoundingBox(box.x, box.y, box.width, box.height)
+            new_center = list(box.center)
+            new_size = list(box.size)
             
             if self.resize_handle == 'se':
-                new_box.width = max(20, box.width + delta_x)
-                new_box.height = max(20, box.height + delta_y)
+                new_size[0] = max(20, box.size[0] + delta_x)
+                new_size[1] = max(20, box.size[1] + delta_y)
+                new_center[0] = box.center[0] + delta_x / 2
+                new_center[1] = box.center[1] + delta_y / 2
             elif self.resize_handle == 'sw':
-                new_x = box.x + delta_x
-                new_w = box.width - delta_x
-                if new_w >= 20:
-                    new_box.x = new_x
-                    new_box.width = new_w
-                new_box.height = max(20, box.height + delta_y)
+                new_size[0] = max(20, box.size[0] - delta_x)
+                new_size[1] = max(20, box.size[1] + delta_y)
+                new_center[0] = box.center[0] + delta_x / 2
+                new_center[1] = box.center[1] + delta_y / 2
             elif self.resize_handle == 'ne':
-                new_y = box.y + delta_y
-                new_h = box.height - delta_y
-                if new_h >= 20:
-                    new_box.y = new_y
-                    new_box.height = new_h
-                new_box.width = max(20, box.width + delta_x)
+                new_size[0] = max(20, box.size[0] + delta_x)
+                new_size[1] = max(20, box.size[1] - delta_y)
+                new_center[0] = box.center[0] + delta_x / 2
+                new_center[1] = box.center[1] + delta_y / 2
             elif self.resize_handle == 'nw':
-                new_x = box.x + delta_x
-                new_y = box.y + delta_y
-                new_w = box.width - delta_x
-                new_h = box.height - delta_y
-                if new_w >= 20 and new_h >= 20:
-                    new_box.x = new_x
-                    new_box.y = new_y
-                    new_box.width = new_w
-                    new_box.height = new_h
+                new_size[0] = max(20, box.size[0] - delta_x)
+                new_size[1] = max(20, box.size[1] - delta_y)
+                new_center[0] = box.center[0] + delta_x / 2
+                new_center[1] = box.center[1] + delta_y / 2
+            
+            new_box = BoundingBox(tuple(new_center), tuple(new_size), box.angle)
             
             self.bounding_boxes[self.selected_box_index] = new_box
             self.redraw()
@@ -408,11 +390,10 @@ class StampCanvas(tk.Canvas):
             
             # Ограничение перемещения в пределах изображения
             img_h, img_w = self.original_image.shape[:2]
-            new_x = max(0, min(box.x + delta_x, img_w - box.width))
-            new_y = max(0, min(box.y + delta_y, img_h - box.height))
+            new_cx = max(0, min(box.center[0] + delta_x, img_w))
+            new_cy = max(0, min(box.center[1] + delta_y, img_h))
             
-            self.bounding_boxes[self.selected_box_index].x = new_x
-            self.bounding_boxes[self.selected_box_index].y = new_y
+            self.bounding_boxes[self.selected_box_index].center = (new_cx, new_cy)
             self.redraw()
             return
         
@@ -450,7 +431,9 @@ class StampCanvas(tk.Canvas):
             height = oy2 - oy1
 
             if width > 10 and height > 10:
-                self.bounding_boxes.append(BoundingBox(ox1, oy1, width, height))
+                cx = ox1 + width / 2
+                cy = oy1 + height / 2
+                self.bounding_boxes.append(BoundingBox((cx, cy), (width, height), 0.0))
                 # Автоматически выбираем созданную рамку
                 self.selected_box_index = len(self.bounding_boxes) - 1
 
@@ -468,8 +451,8 @@ class StampCanvas(tk.Canvas):
         # Удаление рамки
         for i in range(len(self.bounding_boxes) - 1, -1, -1):
             box = self.bounding_boxes[i]
-            if (box.x <= ox <= box.x + box.width and
-                box.y <= oy <= box.y + box.height):
+            points = box.get_points()
+            if cv2.pointPolygonTest(points, (ox, oy), False) >= 0:
                 self.bounding_boxes.pop(i)
                 if self.selected_box_index == i:
                     self.selected_box_index = -1
