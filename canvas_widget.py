@@ -6,6 +6,7 @@ from PIL import Image, ImageTk, ImageDraw
 from image_utils import BoundingBox
 from constants import COLORS
 
+
 class StampCanvas(tk.Canvas):
     """
     Специализированный виджет холста для отображения изображения,
@@ -32,6 +33,17 @@ class StampCanvas(tk.Canvas):
         self.draw_start = None
         self.draw_current = None
         
+        # Состояние выделения и перемещения
+        self.selected_box_index = -1
+        self.is_dragging = False
+        self.is_resizing = False
+        self.resize_handle = None  # 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
+        self.drag_start = None
+        self.drag_box_start = None
+        
+        # Размер маркера изменения размера
+        self.handle_size = 8
+        
         self.callback = None
         
         # События
@@ -40,6 +52,13 @@ class StampCanvas(tk.Canvas):
         self.bind("<B1-Motion>", self._on_mouse_move)
         self.bind("<ButtonRelease-1>", self._on_mouse_up)
         self.bind("<Button-3>", self._on_right_click)
+        
+        # Курсоры для разных режимов
+        self.cursor_move = "fleur"
+        self.cursor_resize_nwse = "sizing"
+        self.cursor_resize_nesw = "sizing"
+        self.cursor_resize_ns = "sb_v_double_arrow"
+        self.cursor_resize_ew = "sb_h_double_arrow"
 
     def set_callback(self, callback):
         """Установить функцию обратного вызова для обновлений."""
@@ -51,6 +70,9 @@ class StampCanvas(tk.Canvas):
         self.bounding_boxes = []
         self.draw_start = None
         self.draw_current = None
+        self.selected_box_index = -1
+        self.is_dragging = False
+        self.is_resizing = False
         self.redraw()
 
     def set_drawing_mode(self, enabled: bool):
@@ -70,11 +92,13 @@ class StampCanvas(tk.Canvas):
     def clear_boxes(self):
         """Очистить все рамки."""
         self.bounding_boxes = []
+        self.selected_box_index = -1
         self.redraw()
 
     def set_bounding_boxes(self, boxes):
         """Установить список рамок и перерисовать."""
         self.bounding_boxes = boxes
+        self.selected_box_index = -1
         self.redraw()
 
     def _on_resize(self, event):
@@ -108,9 +132,7 @@ class StampCanvas(tk.Canvas):
         rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
         pil_img = Image.fromarray(rgb)
 
-        # Рисование элементов поверх PIL (для производительности или последующего извлечения)
-        # Но на самом деле для отображения лучше рисовать прямо на Canvas или на PIL
-        # В оригинале рисовалось на PIL. Сохраним этот подход.
+        # Рисование элементов поверх PIL (для производительности)
         draw = ImageDraw.Draw(pil_img)
         line_w = max(2, int(disp_w / 400))
 
@@ -119,19 +141,57 @@ class StampCanvas(tk.Canvas):
             sy = int(box.y * self.scale_factor)
             sw = int(box.width * self.scale_factor)
             sh = int(box.height * self.scale_factor)
+            
+            # Пропускаем некорректные размеры
+            if sw <= 0 or sh <= 0:
+                continue
+            
+            # Цвет рамки: выбранная - синий, обычная - зеленый
+            if i == self.selected_box_index:
+                box_color = "#3b82f6"  # Синий для выбранной
+            else:
+                box_color = "#10b981"  # Зеленый для обычной
 
             # Рамка
             for offset in range(line_w):
-                draw.rectangle(
-                    [sx + offset, sy + offset, sx + sw - offset, sy + sh - offset],
-                    outline="#10b981"
-                )
+                x0 = sx + offset
+                y0 = sy + offset
+                x1 = sx + sw - offset
+                y1 = sy + sh - offset
+                
+                if x1 > x0 and y1 > y0:
+                    draw.rectangle(
+                        [x0, y0, x1, y1],
+                        outline=box_color
+                    )
 
             # Метка номера
             label_h = max(16, int(disp_w / 40))
             label_w = max(30, int(disp_w / 20))
-            draw.rectangle([sx, sy - label_h, sx + label_w, sy], fill="#10b981")
+            draw.rectangle([sx, sy - label_h, sx + label_w, sy], fill=box_color)
             draw.text((sx + 4, sy - label_h + 2), f"#{i+1}", fill="white")
+            
+            # Рисуем маркеры изменения размера для выбранной рамки
+            if i == self.selected_box_index:
+                handle_size = self.handle_size
+                
+                # Угловые маркеры
+                handles = [
+                    (sx, sy, 'nw'),           # Верхний левый
+                    (sx + sw, sy, 'ne'),      # Верхний правый
+                    (sx, sy + sh, 'sw'),      # Нижний левый
+                    (sx + sw, sy + sh, 'se'), # Нижний правый
+                ]
+                
+                for hx, hy, handle_name in handles:
+                    # Рисуем маркер
+                    draw.rectangle(
+                        [hx - handle_size//2, hy - handle_size//2, 
+                         hx + handle_size//2, hy + handle_size//2],
+                        fill=box_color,
+                        outline="white",
+                        width=1
+                    )
 
         # Текущая рамка (в процессе рисования)
         if self.draw_start and self.draw_current:
@@ -141,11 +201,18 @@ class StampCanvas(tk.Canvas):
             y1 = min(sy1, sy2)
             x2 = max(sx1, sx2)
             y2 = max(sy1, sy2)
-            for offset in range(line_w):
-                draw.rectangle(
-                    [x1 + offset, y1 + offset, x2 - offset, y2 - offset],
-                    outline="#3b82f6"
-                )
+            # Проверяем минимальный размер
+            if x2 > x1 and y2 > y1:
+                for offset in range(line_w):
+                    nx1 = x1 + offset
+                    ny1 = y1 + offset
+                    nx2 = x2 - offset
+                    ny2 = y2 - offset
+                    if nx2 > nx1 and ny2 > ny1:
+                        draw.rectangle(
+                            [nx1, ny1, nx2, ny2],
+                            outline="#3b82f6"
+                        )
 
         self.photo_image = ImageTk.PhotoImage(pil_img)
         self.delete("all")
@@ -164,40 +231,232 @@ class StampCanvas(tk.Canvas):
             return 0, 0
         return int(x / self.scale_factor), int(y / self.scale_factor)
 
-    def _on_mouse_down(self, event):
-        if not self.is_drawing_mode or self.original_image is None:
+    def _get_box_at_position(self, x, y):
+        """Найти рамку по координатам экрана."""
+        for i in range(len(self.bounding_boxes) - 1, -1, -1):
+            box = self.bounding_boxes[i]
+            sx = int(box.x * self.scale_factor)
+            sy = int(box.y * self.scale_factor)
+            sw = int(box.width * self.scale_factor)
+            sh = int(box.height * self.scale_factor)
+            
+            if sx <= x <= sx + sw and sy <= y <= sy + sh:
+                return i
+        return -1
+
+    def _get_resize_handle_at_position(self, x, y):
+        """Определить, какой маркер изменения размера под курсором."""
+        if self.selected_box_index < 0:
+            return None
+        
+        box = self.bounding_boxes[self.selected_box_index]
+        sx = int(box.x * self.scale_factor)
+        sy = int(box.y * self.scale_factor)
+        sw = int(box.width * self.scale_factor)
+        sh = int(box.height * self.scale_factor)
+        
+        handle_size = self.handle_size
+        
+        # Проверяем угловые маркеры
+        handles = [
+            (sx, sy, 'nw'),
+            (sx + sw, sy, 'ne'),
+            (sx, sy + sh, 'sw'),
+            (sx + sw, sy + sh, 'se'),
+        ]
+        
+        for hx, hy, handle_name in handles:
+            if (hx - handle_size//2 <= x <= hx + handle_size//2 and
+                hy - handle_size//2 <= y <= hy + handle_size//2):
+                return handle_name
+        
+        return None
+
+    def _update_cursor(self, x, y):
+        """Обновить курсор в зависимости от положения."""
+        if self.original_image is None:
             return
-        x, y = self._canvas_to_display(event.x, event.y)
-        self.draw_start = (x, y)
-        self.draw_current = (x, y)
+        
+        dx, dy = self._canvas_to_display(x, y)
+        
+        # Проверяем маркеры изменения размера
+        handle = self._get_resize_handle_at_position(dx, dy)
+        if handle:
+            if handle in ('nw', 'se'):
+                self.configure(cursor=self.cursor_resize_nwse)
+            elif handle in ('ne', 'sw'):
+                self.configure(cursor=self.cursor_resize_nesw)
+            return
+        
+        # Проверяем внутри рамки
+        box_idx = self._get_box_at_position(dx, dy)
+        if box_idx >= 0:
+            self.configure(cursor=self.cursor_move)
+            return
+        
+        # Обычный режим
+        if self.is_drawing_mode:
+            self.configure(cursor="crosshair")
+        else:
+            self.configure(cursor="arrow")
+
+    def _on_mouse_down(self, event):
+        if self.original_image is None:
+            return
+        
+        dx, dy = self._canvas_to_display(event.x, event.y)
+        
+        # Проверяем маркер изменения размера
+        if self.selected_box_index >= 0:
+            handle = self._get_resize_handle_at_position(dx, dy)
+            if handle:
+                self.is_resizing = True
+                self.resize_handle = handle
+                self.drag_start = (dx, dy)
+                self.drag_box_start = BoundingBox(
+                    self.bounding_boxes[self.selected_box_index].x,
+                    self.bounding_boxes[self.selected_box_index].y,
+                    self.bounding_boxes[self.selected_box_index].width,
+                    self.bounding_boxes[self.selected_box_index].height
+                )
+                return
+        
+        # Проверяем выбор рамки (не в режиме рисования)
+        if not self.is_drawing_mode:
+            box_idx = self._get_box_at_position(dx, dy)
+            if box_idx >= 0:
+                self.selected_box_index = box_idx
+                self.is_dragging = True
+                self.drag_start = (dx, dy)
+                self.drag_box_start = BoundingBox(
+                    self.bounding_boxes[box_idx].x,
+                    self.bounding_boxes[box_idx].y,
+                    self.bounding_boxes[box_idx].width,
+                    self.bounding_boxes[box_idx].height
+                )
+                self.redraw()
+                return
+            else:
+                # Клик вне рамки - снимаем выделение
+                if self.selected_box_index >= 0:
+                    self.selected_box_index = -1
+                    self.redraw()
+        
+        # Режим рисования
+        if self.is_drawing_mode:
+            self.draw_start = (dx, dy)
+            self.draw_current = (dx, dy)
 
     def _on_mouse_move(self, event):
-        if not self.is_drawing_mode or self.draw_start is None:
+        if self.original_image is None:
             return
-        x, y = self._canvas_to_display(event.x, event.y)
-        self.draw_current = (x, y)
-        self.redraw()
+        
+        dx, dy = self._canvas_to_display(event.x, event.y)
+        
+        # Обновляем курсор
+        self._update_cursor(event.x, event.y)
+        
+        # Изменение размера
+        if self.is_resizing and self.selected_box_index >= 0 and self.drag_start and self.drag_box_start:
+            orig_dx, orig_dy = self.drag_start
+            box = self.drag_box_start
+            
+            delta_x = int((dx - orig_dx) / self.scale_factor)
+            delta_y = int((dy - orig_dy) / self.scale_factor)
+            
+            new_box = BoundingBox(box.x, box.y, box.width, box.height)
+            
+            if self.resize_handle == 'se':
+                new_box.width = max(20, box.width + delta_x)
+                new_box.height = max(20, box.height + delta_y)
+            elif self.resize_handle == 'sw':
+                new_x = box.x + delta_x
+                new_w = box.width - delta_x
+                if new_w >= 20:
+                    new_box.x = new_x
+                    new_box.width = new_w
+                new_box.height = max(20, box.height + delta_y)
+            elif self.resize_handle == 'ne':
+                new_y = box.y + delta_y
+                new_h = box.height - delta_y
+                if new_h >= 20:
+                    new_box.y = new_y
+                    new_box.height = new_h
+                new_box.width = max(20, box.width + delta_x)
+            elif self.resize_handle == 'nw':
+                new_x = box.x + delta_x
+                new_y = box.y + delta_y
+                new_w = box.width - delta_x
+                new_h = box.height - delta_y
+                if new_w >= 20 and new_h >= 20:
+                    new_box.x = new_x
+                    new_box.y = new_y
+                    new_box.width = new_w
+                    new_box.height = new_h
+            
+            self.bounding_boxes[self.selected_box_index] = new_box
+            self.redraw()
+            return
+        
+        # Перемещение
+        if self.is_dragging and self.selected_box_index >= 0 and self.drag_start and self.drag_box_start:
+            orig_dx, orig_dy = self.drag_start
+            box = self.drag_box_start
+            
+            delta_x = int((dx - orig_dx) / self.scale_factor)
+            delta_y = int((dy - orig_dy) / self.scale_factor)
+            
+            # Ограничение перемещения в пределах изображения
+            img_h, img_w = self.original_image.shape[:2]
+            new_x = max(0, min(box.x + delta_x, img_w - box.width))
+            new_y = max(0, min(box.y + delta_y, img_h - box.height))
+            
+            self.bounding_boxes[self.selected_box_index].x = new_x
+            self.bounding_boxes[self.selected_box_index].y = new_y
+            self.redraw()
+            return
+        
+        # Рисование новой рамки
+        if self.is_drawing_mode and self.draw_start:
+            self.draw_current = (dx, dy)
+            self.redraw()
 
     def _on_mouse_up(self, event):
-        if not self.is_drawing_mode or self.draw_start is None or self.draw_current is None:
+        # Завершение изменения размера
+        if self.is_resizing:
+            self.is_resizing = False
+            self.resize_handle = None
+            self.drag_start = None
+            self.drag_box_start = None
             return
+        
+        # Завершение перемещения
+        if self.is_dragging:
+            self.is_dragging = False
+            self.drag_start = None
+            self.drag_box_start = None
+            return
+        
+        # Завершение рисования
+        if self.is_drawing_mode and self.draw_start and self.draw_current:
+            x1, y1 = self.draw_start
+            x2, y2 = self.draw_current
 
-        x1, y1 = self.draw_start
-        x2, y2 = self.draw_current
+            # Конвертируем в ориг. координаты
+            ox1, oy1 = self._display_to_original(min(x1, x2), min(y1, y2))
+            ox2, oy2 = self._display_to_original(max(x1, x2), max(y1, y2))
 
-        # Конвертируем в ориг. координаты
-        ox1, oy1 = self._display_to_original(min(x1, x2), min(y1, y2))
-        ox2, oy2 = self._display_to_original(max(x1, x2), max(y1, y2))
+            width = ox2 - ox1
+            height = oy2 - oy1
 
-        width = ox2 - ox1
-        height = oy2 - oy1
+            if width > 10 and height > 10:
+                self.bounding_boxes.append(BoundingBox(ox1, oy1, width, height))
+                # Автоматически выбираем созданную рамку
+                self.selected_box_index = len(self.bounding_boxes) - 1
 
-        if width > 10 and height > 10:
-            self.bounding_boxes.append(BoundingBox(ox1, oy1, width, height))
-
-        self.draw_start = None
-        self.draw_current = None
-        self.redraw()
+            self.draw_start = None
+            self.draw_current = None
+            self.redraw()
 
     def _on_right_click(self, event):
         if self.original_image is None:
@@ -212,5 +471,9 @@ class StampCanvas(tk.Canvas):
             if (box.x <= ox <= box.x + box.width and
                 box.y <= oy <= box.y + box.height):
                 self.bounding_boxes.pop(i)
+                if self.selected_box_index == i:
+                    self.selected_box_index = -1
+                elif self.selected_box_index > i:
+                    self.selected_box_index -= 1
                 self.redraw()
                 break

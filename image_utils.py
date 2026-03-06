@@ -5,11 +5,12 @@ from PIL import Image, ImageDraw, ImageFont
 
 class BoundingBox:
     """Представляет ограничивающую рамку найденного объекта."""
-    def __init__(self, x: int, y: int, width: int, height: int):
+    def __init__(self, x: int, y: int, width: int, height: int, angle: float = 0.0):
         self.x = x
         self.y = y
         self.width = width
         self.height = height
+        self.angle = angle
 
     def area(self) -> int:
         return self.width * self.height
@@ -186,7 +187,7 @@ def wrap_rich_text(markup: str, font_size: int, max_width: int, draw: ImageDraw.
     for para_markup in markup.split("\n"):
         para_segments = parse_markup(para_markup)
         if not para_segments:
-            all_lines.append([]) 
+            all_lines.append([])
             continue
             
         current_line = []
@@ -195,22 +196,56 @@ def wrap_rich_text(markup: str, font_size: int, max_width: int, draw: ImageDraw.
         for seg in para_segments:
             words = seg["text"].split(" ")
             for i, word in enumerate(words):
-                actual_text = word
-                if i > 0:
-                    actual_text = " " + word
+                if not word and i != len(words) - 1:
+                    # Одиночный пробел, если он есть между словами
+                    continue
+                    
+                # Если это не первое слово в сегменте и мы не в начале строки, добавим пробел
+                needs_space = (i > 0 or current_line) and current_line
+                actual_text = " " + word if needs_space else word
                 
                 word_seg = seg.copy()
                 word_seg["text"] = actual_text
                 w, _ = get_segment_width(word_seg, font_size, draw)
                 
-                if current_line_width + w <= max_width:
+                # Если слово длиннее max_width, разбиваем его на части
+                if w > max_width:
+                    # Сначала добавляем текущую строку, если она не пустая
+                    if current_line:
+                        all_lines.append(current_line)
+                        current_line = []
+                        current_line_width = 0
+                    
+                    # Разбиваем слово на части
+                    word_seg_clean = seg.copy()
+                    word_seg_clean["text"] = word
+                    char_width = w / len(word) if len(word) > 0 else font_size / 2
+                    chars_per_line = max(1, int(max_width / char_width))
+                    
+                    for j in range(0, len(word), chars_per_line):
+                        part = word[j:j + chars_per_line]
+                        part_seg = seg.copy()
+                        part_seg["text"] = part
+                        part_w, _ = get_segment_width(part_seg, font_size, draw)
+                        
+                        if current_line_width + part_w <= max_width or not current_line:
+                            current_line.append(part_seg)
+                            current_line_width += part_w
+                        else:
+                            if current_line:
+                                all_lines.append(current_line)
+                            current_line = [part_seg]
+                            current_line_width = part_w
+                elif current_line_width + w <= max_width or (not current_line and needs_space is False):
+                    # Помещается в текущую строку, либо строка пустая и слово длиннее ширины (выводим как есть)
                     current_line.append(word_seg)
                     current_line_width += w
                 else:
+                    # Не помещается, переносим на новую строку
                     if current_line:
                         all_lines.append(current_line)
                     
-                    word_seg["text"] = word.strip()
+                    word_seg["text"] = word.strip() if word.strip() else word
                     w, _ = get_segment_width(word_seg, font_size, draw)
                     current_line = [word_seg]
                     current_line_width = w
