@@ -119,8 +119,7 @@ class MarkorezApp(ctk.CTk):
         set_language(lang)
         self.title(_("app_title"))
         import tkinter.messagebox as messagebox
-        msg = "Пожалуйста, перезапустите приложение для полного применения языка." if lang == "ru" else "Please restart the application to fully apply the language changes."
-        messagebox.showinfo("Перезапуск / Restart required", msg)
+        messagebox.showinfo(_("msg_restart_title"), _("msg_restart"))
 
     def _build_auto_search_panel(self, parent):
         """Панель авто-поиска."""
@@ -630,8 +629,8 @@ class MarkorezApp(ctk.CTk):
     def _open_file(self):
         """Открыть файл изображения."""
         filetypes = [
-            ("Изображения", "*.jpg *.jpeg *.png *.bmp *.tiff *.tif *.webp"),
-            ("Все файлы", "*.*")
+            (_("val_images"), "*.jpg *.jpeg *.png *.bmp *.tiff *.tif *.webp"),
+            (_("val_all_files"), "*.*")
         ]
         path = filedialog.askopenfilename(title=_("dlg_open_scan"),
                                           filetypes=filetypes)

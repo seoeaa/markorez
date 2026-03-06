@@ -25,7 +25,8 @@ echo.
 echo [2/3] Сборка .exe...
 pyinstaller --onefile --windowed ^
     --name "Markorez" ^
-    --add-data "C:\Users\%USERNAME%\AppData\Local\Programs\Python\*\Lib\site-packages\customtkinter;customtkinter/" ^
+    --collect-all customtkinter ^
+    --add-data ".;." ^
     main.py
 
 if errorlevel 1 (

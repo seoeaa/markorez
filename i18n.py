@@ -108,7 +108,11 @@ TRANSLATIONS = {
         "btn_done": "✅ ГОТОВО",
         "btn_apply": "Применить",
         "btn_cancel": "ОТМЕНА",
-        "btn_delete": "Удалить"
+        "btn_delete": "Удалить",
+        "msg_restart": "Пожалуйста, перезапустите приложение для полного применения языка.",
+        "msg_restart_title": "Перезапуск требуется",
+        "val_images": "Изображения",
+        "val_all_files": "Все файлы"
     },
     "en": {
         "app_title": "Markorez — Smart Stamp Cropping",
@@ -215,7 +219,11 @@ TRANSLATIONS = {
         "btn_done": "✅ DONE",
         "btn_apply": "Apply",
         "btn_cancel": "CANCEL",
-        "btn_delete": "Delete"
+        "btn_delete": "Delete",
+        "msg_restart": "Please restart the application to fully apply the language changes.",
+        "msg_restart_title": "Restart required",
+        "val_images": "Images",
+        "val_all_files": "All files"
 }
 }
 
