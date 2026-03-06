@@ -66,14 +66,14 @@ class HelpWindow(ctk.CTkToplevel):
         # Текстовое поле для тела
         self.text_info = ctk.CTkTextbox(
             main_frame, 
-            font=ctk.CTkFont(size=14.5),
+            font=ctk.CTkFont(size=14),
             fg_color="transparent",
             wrap="word",
-            padx=10,
-            pady=10
+            padx=0,
+            pady=0
         )
-        self.text_info.pack(fill="both", expand=True, pady=(5, 10))
-        self.text_info.insert("0.0", body_text)
+        self.text_info.pack(fill="both", expand=True, padx=10, pady=(5, 5))
+        self.text_info.insert("1.0", body_text)
         self.text_info.configure(state="disabled")
         
         # Кнопка закрытия
