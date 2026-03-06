@@ -109,17 +109,33 @@ def precise_rect(gray: np.ndarray, coarse_box: tuple[int, int, int, int], pad: i
     x2=min(x+bw+pad_outer,iw); y2=min(y+bh+pad_outer,ih)
     roi_g = gray[y1:y2, x1:x2]
 
-    # Canny-рёбра дают точные границы без раздутия
-    edges = cv2.Canny(roi_g, 15, 60)
-    k = cv2.getStructuringElement(cv2.MORPH_RECT, (4, 4))
-    closed = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, k)
+    # Динамический порог на основе пикселей рамки для заливки фона
+    border_pixels = np.concatenate([
+        roi_g[0, :], roi_g[-1, :], roi_g[:, 0], roi_g[:, -1]
+    ])
+    median_bg = int(np.median(border_pixels))
+    is_dark = median_bg < 128
+    
+    # Добавим поля к кусочку с цветом фона
+    pad_val = 20
+    roi_pad = cv2.copyMakeBorder(roi_g, pad_val, pad_val, pad_val, pad_val, cv2.BORDER_CONSTANT, value=median_bg)
+    
+    if is_dark:
+        _, th = cv2.threshold(roi_pad, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    else:
+        _, th = cv2.threshold(roi_pad, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+    th_clean = cv2.morphologyEx(th, cv2.MORPH_CLOSE, kernel)
 
-    cnts, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnts, _ = cv2.findContours(th_clean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
     if cnts:
         cnt = max(cnts, key=cv2.contourArea)
         if cv2.contourArea(cnt) >= 800:
-            cnt_full = cnt + np.array([x1, y1])
+            hull = cv2.convexHull(cnt)
+            # Возвращаем координаты обратно (вычитаем паддинг roi_pad и добавляем координаты roi_g на всем скане)
+            cnt_full = hull - np.array([pad_val, pad_val]) + np.array([x1, y1])
             center, (rw, rh), angle = cv2.minAreaRect(cnt_full)
             # Добавляем минимальный отступ
             return BoundingBox(center, (rw + pad * 2, rh + pad * 2), angle, contour=cnt_full)

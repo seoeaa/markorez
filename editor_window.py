@@ -45,14 +45,9 @@ class StampEditorWindow(ctk.CTkToplevel):
         self._update_preview()
 
     def _get_img_origin(self):
-        cw = self.crop_canvas.winfo_width()
-        ch = self.crop_canvas.winfo_height()
-        if cw < 50: cw, ch = 600, 600
-        ih, iw = self.stamp_image.shape[:2]
-        r = min((cw-40)/iw, (ch-40)/ih, 1.0)
-        nw, nh = int(iw*r), int(ih*r)
-        ox, oy = cw//2 - nw//2, ch//2 - nh//2
-        return ox, oy, r
+        # Используем смещение и масштаб от отрендеренного превью (которое содержит текст)
+        # Это гарантирует правильное позиционирование поверхностей, даже если пропорции меняются из-за текста
+        return self.img_offset[0], self.img_offset[1], self.last_ratio
 
     def _get_handles(self):
         ox, oy, r = self._get_img_origin()
@@ -296,32 +291,61 @@ class StampEditorWindow(ctk.CTkToplevel):
             h, w = img.shape[:2]
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             
-            # Определяем фон для выбора метода порога
-            is_dark = image_utils.detect_dark_background(img)
+            # Используем Otsu порог для надежного выделения светлой марки на темном фоне
+            from image_utils import detect_dark_background
+            is_dark = detect_dark_background(img)
+            
+            # Добавим поля к изображению с черным цветом (если фон темный),
+            # чтобы контуры не прилипали к краям самого изображения
+            pad = 20
+            
+            # Динамический порог на основе пикселей рамки для заливки фона
+            border_pixels = np.concatenate([
+                gray[0, :], gray[-1, :], gray[:, 0], gray[:, -1]
+            ])
+            median_bg = int(np.median(border_pixels))
+            
+            gray_pad = cv2.copyMakeBorder(gray, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=median_bg)
+            
             if is_dark:
-                # На темном фоне ищем светлую марку
-                _, thresh = cv2.threshold(gray, 45, 255, cv2.THRESH_BINARY)
+                _, th = cv2.threshold(gray_pad, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
             else:
-                # На светлом фоне ищем всё, что не белый
-                _, thresh = cv2.threshold(gray, 225, 255, cv2.THRESH_BINARY_INV)
+                _, th = cv2.threshold(gray_pad, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+                
+            # Закрываем мелкие дырки в пороге и убираем шум
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+            th_clean = cv2.morphologyEx(th, cv2.MORPH_CLOSE, kernel)
             
-            # Закрываем дыры в контуре
-            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
-            closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
-            
-            contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            contours, _ = cv2.findContours(th_clean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             if not contours:
                 return
 
             # Берем самый большой контур (предположительно марка)
             cnt = max(contours, key=cv2.contourArea)
-            if cv2.contourArea(cnt) < (w * h * 0.1): # Минимум 10% площади
+            if cv2.contourArea(cnt) < (w * h * 0.02): # Минимум 2% площади
                 return
 
+            # Вычисляем выпуклую оболочку (чтобы зубчики марки не создавали впадины и рамка не косила)
+            hull = cv2.convexHull(cnt)
+
             # Получаем минимально охватывающий повернутый прямоугольник
-            rect = cv2.minAreaRect(cnt)
+            rect = cv2.minAreaRect(hull)
             (cx, cy), (rw, rh), angle = rect
             
+            # Возвращаем координаты обратно (вычитаем паддинг)
+            cx -= pad
+            cy -= pad
+
+            
+            # Нормализуем угол, чтобы рамка всегда была в пределах [-45, 45] (или около того), 
+            # чтобы маркер вращения оставался физически наверху
+            while angle <= -45:
+                angle += 90
+                rw, rh = rh, rw
+            while angle > 45:
+                angle -= 90
+                rw, rh = rh, rw
+                
             # Небольшой отступ внутрь, чтобы не захватить фон (уменьшаем на 2%)
             rw *= 0.98
             rh *= 0.98
@@ -371,6 +395,7 @@ class StampEditorWindow(ctk.CTkToplevel):
         nw, nh = int(iw*self.last_ratio), int(ih*self.last_ratio)
         cx, cy = cw//2, ch//2
         ox, oy = cx - nw//2, cy - nh//2
+        self.img_offset = (ox, oy)
         
         img_tk = ImageTk.PhotoImage(rendered_pil.resize((nw, nh), Image.Resampling.LANCZOS))
         self.crop_canvas.delete("all")
