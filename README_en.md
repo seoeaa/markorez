@@ -10,7 +10,7 @@ A smart tool for automatic searching and cropping of postage stamps from scans.
 [Русская версия](README.md) | **English version**
 ---
 
-![App Screenshot](screen.png)
+![App Screenshot](./screen.png)
 
 
 ## 📄 Description
