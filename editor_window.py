@@ -24,6 +24,8 @@ class StampEditorWindow(ctk.CTkToplevel):
         self.frame_x, self.frame_y = 50, 50
         self.frame_w, self.frame_h = min(200, w//2), min(200, h//2)
         self.frame_angle = 0.0
+        
+        self._auto_detect_frame()
         self.drag_mode = None
         self.drag_start = None
         self.frame_start_vals = None
@@ -286,6 +288,54 @@ class StampEditorWindow(ctk.CTkToplevel):
         else:
             # Для случаев, когда Modified не сработал (например, KeyRelease)
             self._adjust_textbox_height()
+
+    def _auto_detect_frame(self):
+        """Пытается автоматически найти границы марки на изображении."""
+        try:
+            img = self.stamp_image
+            h, w = img.shape[:2]
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            
+            # Определяем фон для выбора метода порога
+            is_dark = image_utils.detect_dark_background(img)
+            if is_dark:
+                # На темном фоне ищем светлую марку
+                _, thresh = cv2.threshold(gray, 45, 255, cv2.THRESH_BINARY)
+            else:
+                # На светлом фоне ищем всё, что не белый
+                _, thresh = cv2.threshold(gray, 225, 255, cv2.THRESH_BINARY_INV)
+            
+            # Закрываем дыры в контуре
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
+            closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+            
+            contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if not contours:
+                return
+
+            # Берем самый большой контур (предположительно марка)
+            cnt = max(contours, key=cv2.contourArea)
+            if cv2.contourArea(cnt) < (w * h * 0.1): # Минимум 10% площади
+                return
+
+            # Получаем минимально охватывающий повернутый прямоугольник
+            rect = cv2.minAreaRect(cnt)
+            (cx, cy), (rw, rh), angle = rect
+            
+            # Небольшой отступ внутрь, чтобы не захватить фон (уменьшаем на 2%)
+            rw *= 0.98
+            rh *= 0.98
+            
+            # Центрируем и сохраняем
+            self.frame_x = cx - rw/2
+            self.frame_y = cy - rh/2
+            self.frame_w = rw
+            self.frame_h = rh
+            self.frame_angle = angle
+            
+        except Exception as e:
+            # Если что-то пошло не так, оставляем значения по умолчанию
+            print(f"Auto-detect frame error: {e}")
 
     def _adjust_textbox_height(self):
         """Динамически меняет высоту текстового поля под количество строк."""
