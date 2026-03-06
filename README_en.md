@@ -10,6 +10,9 @@ A smart tool for automatic searching and cropping of postage stamps from scans.
 [Русская версия](README.md) | **English version**
 ---
 
+![App Screenshot](screen.png)
+
+
 ## 📄 Description
 
 **Markorez** is a desktop Python application that helps philatelists automatically find and extract postage stamps from scanned images. The program uses computer vision (OpenCV) to detect stamp contours and allows both automatic and manual selection of areas.
@@ -61,7 +64,6 @@ python main.py
 2. Adjust search parameters in the left panel:
    - Threshold — detection sensitivity
    - Min Area — filter for small objects
-   - Dilation Radius — to merge close contours
 3. Click **"Find and Separate"** for automatic search.
 4. Use **"Drawing Mode"** for manual selection if needed.
 5. Click **"Extract"** to crop the found stamps.
