@@ -5,6 +5,7 @@ import image_utils
 import cv2
 import numpy as np
 import re
+from i18n import _
 
 class StampEditorWindow(ctk.CTkToplevel):
     def __init__(self, parent, index, stamp_image, initial_markup):
@@ -14,7 +15,7 @@ class StampEditorWindow(ctk.CTkToplevel):
         self.stamp_image = stamp_image
         self.markup = initial_markup
         
-        self.title(f"Редактор марки #{index + 1}")
+        self.title(_("editor_title", idx=index + 1))
         self.geometry("1100x850")
         self.minsize(900, 700)
         
@@ -151,7 +152,7 @@ class StampEditorWindow(ctk.CTkToplevel):
         self.edit_frame = ctk.CTkScrollableFrame(self, width=400, corner_radius=0, fg_color="#f4f4f5")
         self.edit_frame.grid(row=0, column=1, sticky="nsew", padx=2, pady=2)
         
-        ctk.CTkLabel(self.edit_frame, text="Текст и форматирование", 
+        ctk.CTkLabel(self.edit_frame, text=_("lbl_text_format"), 
                      font=ctk.CTkFont(size=18, weight="bold")).pack(pady=(20, 10))
 
         toolbar = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
@@ -163,29 +164,29 @@ class StampEditorWindow(ctk.CTkToplevel):
 
         align_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
         align_frame.pack(fill="x", padx=30, pady=5)
-        ctk.CTkLabel(align_frame, text="Выравнивание:", font=ctk.CTkFont(size=12)).pack(side="left", padx=(0,10))
+        ctk.CTkLabel(align_frame, text=_("lbl_align"), font=ctk.CTkFont(size=12)).pack(side="left", padx=(0,10))
         align_menu = ctk.CTkSegmentedButton(align_frame, values=["⬅","⬛","➡"], command=self._on_align_changed)
         align_menu.set({"left":"⬅","center":"⬛","right":"➡"}.get(self.parent.caption_align.get(),"⬛"))
         align_menu.pack(side="left")
 
         size_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
         size_frame.pack(fill="x", padx=30, pady=5)
-        ctk.CTkLabel(size_frame, text="Размер:", font=ctk.CTkFont(size=12)).pack(side="left", padx=(0,10))
+        ctk.CTkLabel(size_frame, text=_("lbl_size"), font=ctk.CTkFont(size=12)).pack(side="left", padx=(0,10))
         ctk.CTkSlider(size_frame, from_=10, to=80, variable=self.parent.caption_font_size,
                       command=lambda _: self._update_preview()).pack(side="left", fill="x", expand=True)
 
         color_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
         color_frame.pack(fill="x", padx=30, pady=5)
-        ctk.CTkLabel(color_frame, text="Цвет:", font=ctk.CTkFont(size=12)).pack(side="left", padx=(0,10))
-        color_menu = ctk.CTkSegmentedButton(color_frame, values=["Чёрный","Белый","Серый","Синий","Красный"], command=self._on_color_changed)
-        color_menu.set({"black":"Чёрный","white":"Белый","gray":"Серый","blue":"Синий","red":"Красный"}.get(self.parent.caption_text_color.get(),"Чёрный"))
+        ctk.CTkLabel(color_frame, text=_("lbl_color"), font=ctk.CTkFont(size=12)).pack(side="left", padx=(0,10))
+        color_menu = ctk.CTkSegmentedButton(color_frame, values=[_("val_black"),_("val_white"),_("val_gray"),_("val_blue"),_("val_red")], command=self._on_color_changed)
+        color_menu.set({"black":_("val_black"),"white":_("val_white"),"gray":_("val_gray"),"blue":_("val_blue"),"red":_("val_red")}.get(self.parent.caption_text_color.get(),_("val_black")))
         color_menu.pack(side="left")
 
         bg_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
         bg_frame.pack(fill="x", padx=30, pady=5)
-        ctk.CTkLabel(bg_frame, text="Фон:", font=ctk.CTkFont(size=12)).pack(side="left", padx=(0,10))
-        bg_menu = ctk.CTkSegmentedButton(bg_frame, values=["Белый","Прозр."], command=self._on_bg_changed)
-        bg_menu.set({"white":"Белый","transparent":"Прозр."}.get(self.parent.caption_bg_color.get(),"Белый"))
+        ctk.CTkLabel(bg_frame, text=_("lbl_bg"), font=ctk.CTkFont(size=12)).pack(side="left", padx=(0,10))
+        bg_menu = ctk.CTkSegmentedButton(bg_frame, values=[_("val_white"),_("val_transparent")], command=self._on_bg_changed)
+        bg_menu.set({"white":_("val_white"),"transparent":_("val_transparent")}.get(self.parent.caption_bg_color.get(),_("val_white")))
         bg_menu.pack(side="left")
 
         self.textbox = ctk.CTkTextbox(self.edit_frame, height=200, font=("Segoe UI", 16))
@@ -195,12 +196,12 @@ class StampEditorWindow(ctk.CTkToplevel):
         self.textbox._textbox.tag_configure("italic", font=("Segoe UI", 16, "italic"))
         self.textbox._textbox.tag_configure("bold_italic", font=("Segoe UI", 16, "bold", "italic"))
 
-        ctk.CTkLabel(self.edit_frame, text="Инструменты", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(20,5))
+        ctk.CTkLabel(self.edit_frame, text=_("lbl_tools"), font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(20,5))
         
         # Вращение самого изображения марки
         rotate_row = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
         rotate_row.pack(fill="x", padx=30, pady=5)
-        ctk.CTkLabel(rotate_row, text="Поворот фото:", font=ctk.CTkFont(size=12)).pack(side="left", padx=(0,10))
+        ctk.CTkLabel(rotate_row, text=_("lbl_rotate"), font=ctk.CTkFont(size=12)).pack(side="left", padx=(0,10))
         ctk.CTkButton(rotate_row, text="↺ 90°", width=70, height=36, fg_color="#f59e0b", hover_color="#d97706",
                       command=lambda: self._rotate_image(-90)).pack(side="left", padx=3)
         ctk.CTkButton(rotate_row, text="↻ 90°", width=70, height=36, fg_color="#f59e0b", hover_color="#d97706",
@@ -208,13 +209,13 @@ class StampEditorWindow(ctk.CTkToplevel):
         ctk.CTkButton(rotate_row, text="180°", width=70, height=36, fg_color="#f59e0b", hover_color="#d97706",
                       command=lambda: self._rotate_image(180)).pack(side="left", padx=3)
         
-        ctk.CTkButton(self.edit_frame, text="✂️ Обрезать по рамке", height=45, fg_color="#6366f1", command=self._crop_image).pack(fill="x", padx=30, pady=10)
+        ctk.CTkButton(self.edit_frame, text=_("btn_crop_frame"), height=45, fg_color="#6366f1", command=self._crop_image).pack(fill="x", padx=30, pady=10)
 
         btn_frame = ctk.CTkFrame(self.edit_frame, fg_color="transparent")
         btn_frame.pack(side="bottom", fill="x", padx=30, pady=20)
-        ctk.CTkButton(btn_frame, text="✅ ГОТОВО", height=50, font=ctk.CTkFont(size=14, weight="bold"),
+        ctk.CTkButton(btn_frame, text=_("btn_done"), height=50, font=ctk.CTkFont(size=14, weight="bold"),
                       fg_color="#10b981", hover_color="#059669", command=self._save_and_close).pack(fill="x", pady=5)
-        ctk.CTkButton(btn_frame, text="ОТМЕНА", height=40, fg_color="#94a3b8", command=self.destroy).pack(fill="x")
+        ctk.CTkButton(btn_frame, text=_("btn_cancel"), height=40, fg_color="#94a3b8", command=self.destroy).pack(fill="x")
 
     def _apply_tag(self, tag_type):
         try:
@@ -329,11 +330,11 @@ class StampEditorWindow(ctk.CTkToplevel):
         self._update_preview()
 
     def _on_color_changed(self, value):
-        self.parent.caption_text_color.set({"Чёрный":"black","Белый":"white","Серый":"gray","Синий":"blue","Красный":"red"}.get(value,"black"))
+        self.parent.caption_text_color.set({_("val_black"):"black",_("val_white"):"white",_("val_gray"):"gray",_("val_blue"):"blue",_("val_red"):"red"}.get(value,"black"))
         self._update_preview()
 
     def _on_bg_changed(self, value):
-        self.parent.caption_bg_color.set({"Белый":"white","Прозр.":"transparent"}.get(value,"white"))
+        self.parent.caption_bg_color.set({_("val_white"):"white",_("val_transparent"):"transparent"}.get(value,"white"))
         self._update_preview()
 
     def _rotate_image(self, degrees):

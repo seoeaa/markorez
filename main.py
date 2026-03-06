@@ -13,6 +13,7 @@ import threading
 
 import image_utils
 import webbrowser
+from i18n import _, set_language, get_current_language
 from image_utils import BoundingBox, process_image, detect_dark_background, render_stamp_with_caption
 from editor_window import StampEditorWindow
 from constants import COLORS, THUMB_SIZE, MAX_DIM
@@ -27,7 +28,7 @@ class MarkorezApp(ctk.CTk):
         super().__init__()
         
         # Настройки окна
-        self.title("Маркорез — Нарезка почтовых марок")
+        self.title(_("app_title"))
         self.geometry("1280x800")
         self.minsize(900, 600)
         
@@ -81,9 +82,17 @@ class MarkorezApp(ctk.CTk):
 
         title_frame = ctk.CTkFrame(header_inner, fg_color="transparent")
         title_frame.pack(side="left")
-        ctk.CTkLabel(title_frame, text="Маркорез",
+        ctk.CTkLabel(title_frame, text=_("app_title").split(" —")[0],
                      font=ctk.CTkFont(size=18, weight="bold"),
                      text_color=COLORS["text"]).pack(anchor="w", pady=(8, 0))
+
+        # Язык
+        lang_frame = ctk.CTkFrame(header_inner, fg_color="transparent")
+        lang_frame.pack(side="right", padx=10, pady=10)
+        self.lang_var = ctk.StringVar(value=get_current_language().upper())
+        self.lang_menu = ctk.CTkOptionMenu(lang_frame, values=["RU", "EN"], variable=self.lang_var, 
+                                           command=self._on_language_changed, width=70)
+        self.lang_menu.pack()
 
         # ─── Основная область ───
         main_frame = ctk.CTkFrame(self, fg_color=COLORS["bg"], corner_radius=0)
@@ -105,6 +114,14 @@ class MarkorezApp(ctk.CTk):
         self._build_canvas_area(right_panel)
         self._build_results_area(right_panel)
 
+    def _on_language_changed(self, choice):
+        lang = "ru" if choice == "RU" else "en"
+        set_language(lang)
+        self.title(_("app_title"))
+        import tkinter.messagebox as messagebox
+        msg = "Пожалуйста, перезапустите приложение для полного применения языка." if lang == "ru" else "Please restart the application to fully apply the language changes."
+        messagebox.showinfo("Перезапуск / Restart required", msg)
+
     def _build_auto_search_panel(self, parent):
         """Панель авто-поиска."""
         card = ctk.CTkFrame(parent, fg_color=COLORS["card"], corner_radius=12,
@@ -114,7 +131,7 @@ class MarkorezApp(ctk.CTk):
         # Заголовок
         header = ctk.CTkFrame(card, fg_color="transparent")
         header.pack(fill="x", padx=16, pady=(16, 12))
-        ctk.CTkLabel(header, text="⚙️  АВТО-ПОИСК",
+        ctk.CTkLabel(header, text="⚙️  " + _("tab_auto").upper(),
                      font=ctk.CTkFont(size=11, weight="bold"),
                      text_color=COLORS["text_secondary"]).pack(anchor="w")
 
@@ -124,13 +141,13 @@ class MarkorezApp(ctk.CTk):
         # Порог
         thresh_header = ctk.CTkFrame(content, fg_color="transparent")
         thresh_header.pack(fill="x", pady=(0, 2))
-        ctk.CTkLabel(thresh_header, text="Порог (Threshold)",
+        ctk.CTkLabel(thresh_header, text=_("lbl_thresh").split(":")[0],
                      font=ctk.CTkFont(size=13),
                      text_color=COLORS["text"]).pack(side="left")
 
         auto_frame = ctk.CTkFrame(thresh_header, fg_color="transparent")
         auto_frame.pack(side="right")
-        self.auto_check = ctk.CTkCheckBox(auto_frame, text="Авто", variable=self.use_auto_threshold,
+        self.auto_check = ctk.CTkCheckBox(auto_frame, text=_("lbl_auto_thresh").split("(")[0].strip(), variable=self.use_auto_threshold,
                                           command=self._on_auto_threshold_changed,
                                           font=ctk.CTkFont(size=11),
                                           checkbox_width=18, checkbox_height=18,
@@ -154,15 +171,15 @@ class MarkorezApp(ctk.CTk):
         self._on_auto_threshold_changed()
 
         # Мин. площадь
-        self._add_slider(content, "Мин. площадь (px²)", self.min_area_var,
-                         1000, 50000, "area_label")
+        self._add_slider(content, _("lbl_min_area").split("(")[0].strip(), self.min_area_var,
+                         1000, 50000, "area_label", suffix="px²")
 
         # Радиус дилатации
-        self._add_slider(content, "Радиус дилатации", self.blur_radius_var,
+        self._add_slider(content, _("lbl_dilate").split("(")[0].strip(), self.blur_radius_var,
                          0, 10, "blur_label", suffix="px")
 
         # Инверсия
-        ctk.CTkCheckBox(content, text="Тёмный фон скана", variable=self.invert_var,
+        ctk.CTkCheckBox(content, text=_("lbl_invert"), variable=self.invert_var,
                         font=ctk.CTkFont(size=13),
                         checkbox_width=18, checkbox_height=18,
                         fg_color=COLORS["accent"],
@@ -174,7 +191,7 @@ class MarkorezApp(ctk.CTk):
 
         # Кнопка обработки
         self.process_btn = ctk.CTkButton(
-            content, text="✂️  Найти и разделить", height=40,
+            content, text=_("btn_find_cut"), height=40,
             font=ctk.CTkFont(size=14, weight="bold"),
             fg_color=COLORS["accent"], hover_color=COLORS["accent_hover"],
             command=self._handle_process
@@ -189,7 +206,7 @@ class MarkorezApp(ctk.CTk):
 
         header = ctk.CTkFrame(card, fg_color="transparent")
         header.pack(fill="x", padx=16, pady=(16, 12))
-        ctk.CTkLabel(header, text="🖱️  РУЧНЫЕ ИНСТРУМЕНТЫ",
+        ctk.CTkLabel(header, text=_("tab_manual_tools"),
                      font=ctk.CTkFont(size=11, weight="bold"),
                      text_color=COLORS["text_secondary"]).pack(anchor="w")
 
@@ -198,7 +215,7 @@ class MarkorezApp(ctk.CTk):
 
         # Кнопка режима рисования
         self.draw_btn = ctk.CTkButton(
-            content, text="🖊️  Включить рисование", height=36,
+            content, text=_("btn_draw_mode"), height=36,
             font=ctk.CTkFont(size=13),
             fg_color=COLORS["card"], hover_color=COLORS["blue_light"],
             text_color=COLORS["text"],
@@ -211,7 +228,7 @@ class MarkorezApp(ctk.CTk):
         self.draw_hint = ctk.CTkFrame(content, fg_color=COLORS["blue_light"], corner_radius=8)
         self.draw_hint_label = ctk.CTkLabel(
             self.draw_hint,
-            text="• ЛКМ зажать + тянуть → рамка\n• ПКМ по рамке → удалить",
+            text=_("hint_draw"),
             font=ctk.CTkFont(size=11),
             text_color=COLORS["blue_text"],
             justify="left"
@@ -221,7 +238,7 @@ class MarkorezApp(ctk.CTk):
         self.draw_hint.pack_forget()
 
         # Отступ обрезки
-        self._add_slider(content, "Отступ обрезки", self.padding_var,
+        self._add_slider(content, _("lbl_padding").split("(")[0].strip(), self.padding_var,
                          0, 100, "padding_label", suffix="px")
 
         # Разделитель
@@ -233,7 +250,7 @@ class MarkorezApp(ctk.CTk):
         btn_frame.pack(fill="x")
 
         self.clear_btn = ctk.CTkButton(
-            btn_frame, text="🗑️ Очистить", height=34,
+            btn_frame, text=_("btn_clear"), height=34,
             font=ctk.CTkFont(size=12),
             fg_color=COLORS["card"], hover_color=COLORS["red_light"],
             text_color=COLORS["text"],
@@ -243,7 +260,7 @@ class MarkorezApp(ctk.CTk):
         self.clear_btn.pack(side="left", expand=True, fill="x", padx=(0, 4))
 
         self.extract_btn = ctk.CTkButton(
-            btn_frame, text="🖼️ Извлечь", height=34,
+            btn_frame, text=_("btn_extract_imgs"), height=34,
             font=ctk.CTkFont(size=12),
             fg_color=COLORS["dark"], hover_color=COLORS["dark_hover"],
             text_color="white",
@@ -262,7 +279,7 @@ class MarkorezApp(ctk.CTk):
         # Размер
         size_frame = ctk.CTkFrame(row1, fg_color="transparent")
         size_frame.pack(side="left", padx=(0, 10))
-        ctk.CTkLabel(size_frame, text="Размер:", font=ctk.CTkFont(size=11)).pack(side="left")
+        ctk.CTkLabel(size_frame, text=_("lbl_size"), font=ctk.CTkFont(size=11)).pack(side="left")
         ctk.CTkSlider(size_frame, from_=10, to=80, variable=self.caption_font_size, width=80, command=lambda _: self._trigger_preview_update()).pack(side="left", padx=4)
 
         # Кнопки форматирования (B, I)
@@ -297,23 +314,23 @@ class MarkorezApp(ctk.CTk):
         # Цвет текста
         color_frame = ctk.CTkFrame(row2, fg_color="transparent")
         color_frame.pack(side="left", padx=(0, 10))
-        ctk.CTkLabel(color_frame, text="Цвет:", font=ctk.CTkFont(size=11)).pack(side="left", padx=(0, 4))
-        c_menu = ctk.CTkSegmentedButton(color_frame, values=["Чёрный", "Белый", "Серый", "Синий", "Красный"], command=self._on_text_color_changed, font=ctk.CTkFont(size=11))
-        c_menu.set("Чёрный")
+        ctk.CTkLabel(color_frame, text=_("lbl_color"), font=ctk.CTkFont(size=11)).pack(side="left", padx=(0, 4))
+        c_menu = ctk.CTkSegmentedButton(color_frame, values=[_("val_black"), _("val_white"), _("val_gray"), _("val_blue"), _("val_red")], command=self._on_text_color_changed, font=ctk.CTkFont(size=11))
+        c_menu.set(_("val_black"))
         c_menu.pack(side="left")
 
         # Фон подписи
         bg_frame = ctk.CTkFrame(row2, fg_color="transparent")
         bg_frame.pack(side="left")
-        ctk.CTkLabel(bg_frame, text="Фон:", font=ctk.CTkFont(size=11)).pack(side="left", padx=(0, 4))
-        bg_menu = ctk.CTkSegmentedButton(bg_frame, values=["Белый", "Прозр."], command=self._on_caption_bg_changed, font=ctk.CTkFont(size=11))
-        bg_menu.set("Белый")
+        ctk.CTkLabel(bg_frame, text=_("lbl_bg"), font=ctk.CTkFont(size=11)).pack(side="left", padx=(0, 4))
+        bg_menu = ctk.CTkSegmentedButton(bg_frame, values=[_("val_white"), _("val_transparent")], command=self._on_caption_bg_changed, font=ctk.CTkFont(size=11))
+        bg_menu.set(_("val_white"))
         bg_menu.pack(side="left")
 
         return toolbar
 
     def _on_caption_bg_changed(self, value):
-        self.caption_bg_color.set("white" if value == "Белый" else "transparent")
+        self.caption_bg_color.set("white" if value == _("val_white") else "transparent")
         self._trigger_preview_update()
 
     def _on_align_changed(self, value):
@@ -323,8 +340,8 @@ class MarkorezApp(ctk.CTk):
 
     def _on_text_color_changed(self, value):
         mapping = {
-            "Чёрный": "black", "Белый": "white", "Серый": "#666666",
-            "Синий": "#1a56db", "Красный": "#dc2626"
+            _("val_black"): "black", _("val_white"): "white", _("val_gray"): "#666666",
+            _("val_blue"): "#1a56db", _("val_red"): "#dc2626"
         }
         self.caption_text_color.set(mapping.get(value, "black"))
         self._trigger_preview_update()
@@ -372,22 +389,19 @@ class MarkorezApp(ctk.CTk):
         content = ctk.CTkFrame(card, fg_color="transparent")
         content.pack(fill="x", padx=16, pady=14)
 
-        ctk.CTkLabel(content, text="ℹ️  Как это работает",
+        ctk.CTkLabel(content, text=_("tab_how_it_works"),
                      font=ctk.CTkFont(size=12, weight="bold"),
                      text_color=COLORS["blue_text"]).pack(anchor="w", pady=(0, 4))
 
         ctk.CTkLabel(content,
-                     text="Используйте Авто-поиск для автоматического\n"
-                          "нахождения марок или Режим рисования,\n"
-                          "чтобы вручную выделить пропущенные.\n"
-                          "Нажмите Извлечь для обрезки.",
+                     text=_("lbl_how_it_works_desc"),
                      font=ctk.CTkFont(size=11),
                      text_color=COLORS["blue_text"],
                      justify="left").pack(anchor="w", pady=(0, 10))
 
         # Ссылки
         gh_btn = ctk.CTkButton(
-            content, text="🌐  Проект на GitHub",
+            content, text=_("btn_github"),
             font=ctk.CTkFont(size=11, weight="bold"),
             fg_color="#3b82f6", hover_color="#2563eb",
             height=28,
@@ -396,7 +410,7 @@ class MarkorezApp(ctk.CTk):
         gh_btn.pack(fill="x", pady=(0, 6))
 
         gh_releases_btn = ctk.CTkButton(
-            content, text="📦  Скачать обновления (Релизы)",
+            content, text=_("btn_releases"),
             font=ctk.CTkFont(size=11, weight="bold"),
             fg_color="#10b981", hover_color="#059669",
             height=28,
@@ -405,7 +419,7 @@ class MarkorezApp(ctk.CTk):
         gh_releases_btn.pack(fill="x", pady=(0, 6))
 
         tg_btn = ctk.CTkButton(
-            content, text="💬  Связаться в Telegram",
+            content, text=_("btn_telegram"),
             font=ctk.CTkFont(size=11, weight="bold"),
             fg_color="#0088cc", hover_color="#006699",
             height=28,
@@ -427,14 +441,14 @@ class MarkorezApp(ctk.CTk):
         upload_inner.place(relx=0.5, rely=0.5, anchor="center")
 
         ctk.CTkLabel(upload_inner, text="📤", font=ctk.CTkFont(size=48)).pack(pady=(0, 8))
-        ctk.CTkLabel(upload_inner, text="Загрузить скан",
+        ctk.CTkLabel(upload_inner, text=_("btn_upload_scan"),
                      font=ctk.CTkFont(size=18, weight="bold"),
                      text_color=COLORS["text"]).pack()
-        ctk.CTkLabel(upload_inner, text="JPEG, PNG до 20МБ",
+        ctk.CTkLabel(upload_inner, text=_("lbl_upload_formats"),
                      font=ctk.CTkFont(size=12),
                      text_color=COLORS["text_secondary"]).pack(pady=(2, 12))
 
-        ctk.CTkButton(upload_inner, text="Выбрать файл", height=36,
+        ctk.CTkButton(upload_inner, text=_("btn_choose_file"), height=36,
                       font=ctk.CTkFont(size=13),
                       fg_color=COLORS["accent"], hover_color=COLORS["accent_hover"],
                       command=self._open_file).pack()
@@ -449,7 +463,7 @@ class MarkorezApp(ctk.CTk):
 
         # Кнопка смены фото (поверх холста)
         self.change_photo_btn = ctk.CTkButton(
-            self.canvas_container, text="🔄 Сменить фото", width=120, height=32,
+            self.canvas_container, text=_("btn_change_photo"), width=120, height=32,
             font=ctk.CTkFont(size=12),
             fg_color=COLORS["card"], hover_color="#f4f4f5",
             text_color=COLORS["text"],
@@ -468,7 +482,7 @@ class MarkorezApp(ctk.CTk):
 
     def _on_canvas_updated(self, box_count: int):
         """Вызывается при изменении рамок на холсте."""
-        self.status_label.configure(text=f"Найдено областей: {box_count:02d}")
+        self.status_label.configure(text=_("lbl_found_areas", count=box_count))
         if box_count > 0:
             self.status_bar.pack(fill="x", side="bottom")
         else:
@@ -483,12 +497,12 @@ class MarkorezApp(ctk.CTk):
         results_header = ctk.CTkFrame(self.results_card, fg_color="transparent")
         results_header.pack(fill="x", padx=16, pady=(12, 8))
 
-        ctk.CTkLabel(results_header, text="🖼️  Извлечённые марки",
+        ctk.CTkLabel(results_header, text=_("tab_extracted_stamps"),
                      font=ctk.CTkFont(size=15, weight="bold"),
                      text_color=COLORS["text"]).pack(side="left")
 
         self.download_all_btn = ctk.CTkButton(
-            results_header, text="💾 Сохранить все", height=30,
+            results_header, text=_("btn_save_all"), height=30,
             font=ctk.CTkFont(size=12),
             fg_color=COLORS["accent_light"], hover_color=COLORS["accent"],
             text_color=COLORS["accent_text"],
@@ -510,7 +524,7 @@ class MarkorezApp(ctk.CTk):
         caption_settings_header.pack(fill="x", padx=12, pady=(8, 8))
 
         self.caption_toggle = ctk.CTkCheckBox(
-            caption_settings_header, text="Добавить подписи (описания)",
+            caption_settings_header, text=_("toggle_captions"),
             variable=self.captions_enabled,
             font=ctk.CTkFont(size=13, weight="bold"),
             text_color=COLORS["text"],
@@ -528,7 +542,7 @@ class MarkorezApp(ctk.CTk):
         self._build_caption_format_toolbar(self.global_tools_frame).pack(fill="x")
         
         # Инструкция
-        hint = ctk.CTkLabel(self.global_tools_frame, text="💡 Кликните по марке в списке выше, чтобы изменить её текст",
+        hint = ctk.CTkLabel(self.global_tools_frame, text=_("hint_caption"),
                             font=ctk.CTkFont(size=11, slant="italic"), text_color="gray")
         hint.pack(pady=(8, 0))
 
@@ -594,7 +608,7 @@ class MarkorezApp(ctk.CTk):
         if is_drawing:
             # Сменить цвет кнопки на активный
             self.draw_btn.configure(
-                text="🖊️  Режим рисования вкл.",
+                text=_("btn_draw_mode_on"),
                 fg_color=COLORS["blue_light"],
                 border_color="#93c5fd",
                 text_color=COLORS["blue_text"]
@@ -602,7 +616,7 @@ class MarkorezApp(ctk.CTk):
             self.draw_hint.pack(fill="x", pady=(0, 8))
         else:
             self.draw_btn.configure(
-                text="🖊️  Включить рисование",
+                text=_("btn_draw_mode"),
                 fg_color=COLORS["card"],
                 border_color=COLORS["border"],
                 text_color=COLORS["text"]
@@ -619,7 +633,7 @@ class MarkorezApp(ctk.CTk):
             ("Изображения", "*.jpg *.jpeg *.png *.bmp *.tiff *.tif *.webp"),
             ("Все файлы", "*.*")
         ]
-        path = filedialog.askopenfilename(title="Выберите скан с марками",
+        path = filedialog.askopenfilename(title=_("dlg_open_scan"),
                                           filetypes=filetypes)
         if not path:
             return
@@ -666,7 +680,7 @@ class MarkorezApp(ctk.CTk):
         if self.original_image is None:
             return
 
-        self.process_btn.configure(text="⏳ Обработка...", state="disabled")
+        self.process_btn.configure(text=_("btn_processing"), state="disabled")
 
         def process():
             try:
@@ -709,10 +723,10 @@ class MarkorezApp(ctk.CTk):
                 self.after(0, lambda: self.canvas.set_bounding_boxes(original_boxes))
                 self._extract_stamps()
             except Exception as e:
-                print(f"Ошибка обработки: {e}")
+                print(_("err_processing", error=e))
             finally:
                 self.after(0, lambda: self.process_btn.configure(
-                    text="✂️  Найти и разделить", state="normal"))
+                    text=_("btn_find_cut"), state="normal"))
 
         threading.Thread(target=process, daemon=True).start()
 
@@ -861,7 +875,7 @@ class MarkorezApp(ctk.CTk):
         if not self.extracted_stamps:
             return
 
-        out_dir = filedialog.askdirectory(title="Выберите папку для сохранения")
+        out_dir = filedialog.askdirectory(title=_("dlg_save_folder"))
         if not out_dir:
             return
 
@@ -896,10 +910,10 @@ class MarkorezApp(ctk.CTk):
                 import subprocess
                 subprocess.Popen(["xdg-open", out_dir])
 
-            self.status_label.configure(text=f"✅ Сохранено {len(self.extracted_stamps)} марок")
+            self.status_label.configure(text=_("status_saved", count=len(self.extracted_stamps)))
         except Exception as e:
             from tkinter import messagebox
-            messagebox.showerror("Ошибка сохранения", str(e))
+            messagebox.showerror(_("err_saving_title"), str(e))
 
 
 if __name__ == "__main__":
