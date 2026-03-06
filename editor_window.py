@@ -189,9 +189,10 @@ class StampEditorWindow(ctk.CTkToplevel):
         bg_menu.set({"white":_("val_white"),"transparent":_("val_transparent")}.get(self.parent.caption_bg_color.get(),_("val_white")))
         bg_menu.pack(side="left")
 
-        self.textbox = ctk.CTkTextbox(self.edit_frame, height=200, font=("Segoe UI", 16))
+        self.textbox = ctk.CTkTextbox(self.edit_frame, height=100, font=("Segoe UI", 16))
         self.textbox.pack(fill="x", padx=30, pady=20)
         self.textbox.bind("<<Modified>>", self._on_text_modified)
+        self.textbox.bind("<KeyRelease>", lambda e: self._on_text_modified())
         self.textbox._textbox.tag_configure("bold", font=("Segoe UI", 16, "bold"))
         self.textbox._textbox.tag_configure("italic", font=("Segoe UI", 16, "italic"))
         self.textbox._textbox.tag_configure("bold_italic", font=("Segoe UI", 16, "bold", "italic"))
@@ -280,7 +281,29 @@ class StampEditorWindow(ctk.CTkToplevel):
     def _on_text_modified(self, event=None):
         if self.textbox._textbox.edit_modified():
             self._update_preview()
+            self._adjust_textbox_height()
             self.textbox._textbox.edit_modified(False)
+        else:
+            # Для случаев, когда Modified не сработал (например, KeyRelease)
+            self._adjust_textbox_height()
+
+    def _adjust_textbox_height(self):
+        """Динамически меняет высоту текстового поля под количество строк."""
+        try:
+            # Получаем количество строк
+            content = self.textbox.get("1.0", "end-1c")
+            num_lines = len(content.splitlines()) if content.strip() else 1
+            if content.endswith('\n'):
+                 num_lines += 1
+            
+            # Минимум 4 строки, максимум допустим 15, чтобы не уходило слишком далеко
+            display_lines = max(4, num_lines)
+            new_height = (display_lines * 26) + 20 # 26px на строку + отступы
+            
+            if self.textbox.cget("height") != new_height:
+                self.textbox.configure(height=new_height)
+        except:
+            pass
 
     def _update_preview(self):
         if not self.winfo_exists(): return
