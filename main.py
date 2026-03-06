@@ -245,9 +245,12 @@ class MarkorezApp(ctk.CTk):
         self.threshold_slider.pack(fill="x", pady=(2, 8))
         self._on_auto_threshold_changed()
 
-        # Мин. площадь
         self._add_slider(content, _("lbl_min_area").split("(")[0].strip(), self.min_area_var,
                          1000, 50000, "area_label", suffix="px²", help_key="help_min_area")
+
+        # Отступ обрезки
+        self._add_slider(content, _("lbl_padding").split("(")[0].strip(), self.padding_var,
+                         0, 100, "padding_label", suffix="px")
 
         # Инверсия
         ctk.CTkCheckBox(content, text=_("lbl_invert"), variable=self.invert_var,
@@ -316,9 +319,6 @@ class MarkorezApp(ctk.CTk):
         # Изначально скрыта
         self.draw_hint.pack_forget()
 
-        # Отступ обрезки
-        self._add_slider(content, _("lbl_padding").split("(")[0].strip(), self.padding_var,
-                         0, 100, "padding_label", suffix="px")
 
         # Разделитель удален, кнопки перенесены
         pass
