@@ -189,24 +189,21 @@ class MarkorezApp(ctk.CTk):
         sep.pack(fill="x", pady=(0, 12))
 
         # Кнопки поиска и разделения
-        btn_row = ctk.CTkFrame(content, fg_color="transparent")
-        btn_row.pack(fill="x")
-        
         self.find_btn = ctk.CTkButton(
-            btn_row, text=_("btn_find"), height=40,
+            content, text=_("btn_find"), height=40,
             font=ctk.CTkFont(size=14, weight="bold"),
             fg_color=COLORS["accent"], hover_color=COLORS["accent_hover"],
             command=self._handle_find
         )
-        self.find_btn.pack(side="left", expand=True, fill="x", padx=(0, 4))
+        self.find_btn.pack(fill="x", pady=(0, 8))
         
         self.divide_btn = ctk.CTkButton(
-            btn_row, text=_("btn_divide"), height=40,
+            content, text=_("btn_divide"), height=40,
             font=ctk.CTkFont(size=14, weight="bold"),
             fg_color=COLORS["dark"], hover_color=COLORS["dark_hover"],
             command=self._extract_stamps
         )
-        self.divide_btn.pack(side="left", expand=True, fill="x", padx=(4, 0))
+        self.divide_btn.pack(fill="x", pady=(0, 8))
 
     def _build_manual_tools_panel(self, parent):
         """Панель ручных инструментов."""
