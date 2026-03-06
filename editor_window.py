@@ -45,14 +45,9 @@ class StampEditorWindow(ctk.CTkToplevel):
         self._update_preview()
 
     def _get_img_origin(self):
-        cw = self.crop_canvas.winfo_width()
-        ch = self.crop_canvas.winfo_height()
-        if cw < 50: cw, ch = 600, 600
-        ih, iw = self.stamp_image.shape[:2]
-        r = min((cw-40)/iw, (ch-40)/ih, 1.0)
-        nw, nh = int(iw*r), int(ih*r)
-        ox, oy = cw//2 - nw//2, ch//2 - nh//2
-        return ox, oy, r
+        # Используем смещение и масштаб от отрендеренного превью (которое содержит текст)
+        # Это гарантирует правильное позиционирование поверхностей, даже если пропорции меняются из-за текста
+        return self.img_offset[0], self.img_offset[1], self.last_ratio
 
     def _get_handles(self):
         ox, oy, r = self._get_img_origin()
@@ -322,6 +317,15 @@ class StampEditorWindow(ctk.CTkToplevel):
             rect = cv2.minAreaRect(cnt)
             (cx, cy), (rw, rh), angle = rect
             
+            # Нормализуем угол, чтобы рамка всегда была в пределах [-45, 45] (или около того), 
+            # чтобы маркер вращения оставался физически наверху
+            while angle <= -45:
+                angle += 90
+                rw, rh = rh, rw
+            while angle > 45:
+                angle -= 90
+                rw, rh = rh, rw
+                
             # Небольшой отступ внутрь, чтобы не захватить фон (уменьшаем на 2%)
             rw *= 0.98
             rh *= 0.98
@@ -371,6 +375,7 @@ class StampEditorWindow(ctk.CTkToplevel):
         nw, nh = int(iw*self.last_ratio), int(ih*self.last_ratio)
         cx, cy = cw//2, ch//2
         ox, oy = cx - nw//2, cy - nh//2
+        self.img_offset = (ox, oy)
         
         img_tk = ImageTk.PhotoImage(rendered_pil.resize((nw, nh), Image.Resampling.LANCZOS))
         self.crop_canvas.delete("all")
