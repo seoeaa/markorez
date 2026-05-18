@@ -419,8 +419,12 @@ class MarkorezApp(ctk.CTk):
         if caption and self.captions_enabled.get():
             rendered_img = self._render_stamp_with_caption(stamp, caption)
         else:
-            rgb = cv2.cvtColor(stamp, cv2.COLOR_BGR2RGB)
-            rendered_img = Image.fromarray(rgb)
+            if stamp.shape[2] == 4:
+                rgba = cv2.cvtColor(stamp, cv2.COLOR_BGRA2RGBA)
+                rendered_img = Image.fromarray(rgba, "RGBA")
+            else:
+                rgb = cv2.cvtColor(stamp, cv2.COLOR_BGR2RGB)
+                rendered_img = Image.fromarray(rgb)
             
         # Масштабирование для превью
         rendered_img.thumbnail((150, 150), Image.Resampling.LANCZOS)
@@ -786,10 +790,14 @@ class MarkorezApp(ctk.CTk):
                     # Масштабируем центр и размер обратно
                     orig_center = (box.center[0] / scale, box.center[1] / scale)
                     orig_size = (box.size[0] / scale, box.size[1] / scale)
+                    orig_contour = None
+                    if getattr(box, "contour", None) is not None:
+                        orig_contour = box.contour.reshape(-1, 2).astype(np.float32) / scale
                     original_boxes.append(BoundingBox(
                         orig_center,
                         orig_size,
-                        box.angle
+                        box.angle,
+                        contour=orig_contour
                     ))
 
                 self.after(0, lambda: self.canvas.set_bounding_boxes(original_boxes))
@@ -853,8 +861,12 @@ class MarkorezApp(ctk.CTk):
             self.stamp_frames.append(frame)
 
             # Превью
-            rgb = cv2.cvtColor(stamp, cv2.COLOR_BGR2RGB)
-            pil_img = Image.fromarray(rgb)
+            if stamp.shape[2] == 4:
+                rgba = cv2.cvtColor(stamp, cv2.COLOR_BGRA2RGBA)
+                pil_img = Image.fromarray(rgba, "RGBA")
+            else:
+                rgb = cv2.cvtColor(stamp, cv2.COLOR_BGR2RGB)
+                pil_img = Image.fromarray(rgb)
 
             # Масштабирование с сохранением пропорций
             pil_img.thumbnail((THUMB_SIZE, THUMB_SIZE), Image.Resampling.LANCZOS)

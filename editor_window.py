@@ -449,7 +449,13 @@ class StampEditorWindow(ctk.CTkToplevel):
         new_h = int(h * cos_val + w * sin_val)
         M[0,2] += (new_w/2) - center[0]
         M[1,2] += (new_h/2) - center[1]
-        self.stamp_image = cv2.warpAffine(self.stamp_image, M, (new_w, new_h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+        border = (0, 0, 0, 0) if self.stamp_image.shape[2] == 4 else (0, 0, 0)
+        self.stamp_image = cv2.warpAffine(
+            self.stamp_image, M, (new_w, new_h),
+            flags=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=border
+        )
         # Сбросить рамку
         self.frame_x, self.frame_y = 20, 20
         self.frame_w = min(200, new_w - 40)
@@ -465,7 +471,13 @@ class StampEditorWindow(ctk.CTkToplevel):
             h, w = self.stamp_image.shape[:2]
             center = (w/2, h/2)
             M = cv2.getRotationMatrix2D(center, ang, 1.0)
-            rotated = cv2.warpAffine(self.stamp_image, M, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+            border = (0, 0, 0, 0) if self.stamp_image.shape[2] == 4 else (0, 0, 0)
+            rotated = cv2.warpAffine(
+                self.stamp_image, M, (w, h),
+                flags=cv2.INTER_LINEAR,
+                borderMode=cv2.BORDER_CONSTANT,
+                borderValue=border
+            )
             x = max(0, int(self.frame_x))
             y = max(0, int(self.frame_y))
             ww = min(int(self.frame_w), w - x)
@@ -496,9 +508,12 @@ class StampEditorWindow(ctk.CTkToplevel):
             self.parent.caption_align.get(),
             self.parent.caption_bg_color.get()
         )
-        # Конвертируем PIL -> numpy (BGR) и сохраняем как новое изображение марки
+        # Конвертируем PIL -> numpy и сохраняем как новое изображение марки
         import numpy as _np
-        final_np = cv2.cvtColor(_np.array(final_pil.convert("RGB")), cv2.COLOR_RGB2BGR)
+        if final_pil.mode == "RGBA":
+            final_np = cv2.cvtColor(_np.array(final_pil), cv2.COLOR_RGBA2BGRA)
+        else:
+            final_np = cv2.cvtColor(_np.array(final_pil.convert("RGB")), cv2.COLOR_RGB2BGR)
         self.parent.extracted_stamps[self.index] = final_np
         self.parent.stamp_captions[self.index] = ""  # Текст уже запечён в изображение
         self.parent._update_stamp_thumbnail(self.index)

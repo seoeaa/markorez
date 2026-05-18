@@ -35,16 +35,35 @@ class BoundingBox:
     def get_contour_points(self) -> np.ndarray:
         """Возвращает точный контур объекта, если он есть."""
         if self.contour is not None:
-            return self.contour.astype(np.int32)
+            return self.contour.reshape(-1, 2).astype(np.int32)
         return self.get_points()
 
     def area(self) -> float:
         return self.size[0] * self.size[1]
 
 
-def coarse_boxes(gray: np.ndarray, thresh_val: int) -> list[tuple[int, int, int, int]]:
+def _foreground_threshold(gray: np.ndarray, thresh_val: int, invert: bool = False) -> np.ndarray:
+    """Строит маску объекта, выбирая полярность по фону в углах."""
+    h, w = gray.shape[:2]
+    corner = max(8, min(w, h) // 30)
+    corners = np.concatenate([
+        gray[:corner, :corner].ravel(),
+        gray[:corner, w-corner:].ravel(),
+        gray[h-corner:, :corner].ravel(),
+        gray[h-corner:, w-corner:].ravel(),
+    ])
+    bg_is_dark = int(np.median(corners)) < 128
+    mode = cv2.THRESH_BINARY if bg_is_dark else cv2.THRESH_BINARY_INV
+    if invert:
+        mode = cv2.THRESH_BINARY_INV if mode == cv2.THRESH_BINARY else cv2.THRESH_BINARY
+    _, thresh = cv2.threshold(gray, thresh_val, 255, mode)
+    return thresh
+
+
+def coarse_boxes(gray: np.ndarray, thresh_val: int, invert: bool = False) -> list[tuple[int, int, int, int]]:
     """Шаг 1: грубая сегментация из Stamp Cutter v3."""
-    _, thresh = cv2.threshold(gray, thresh_val, 255, cv2.THRESH_BINARY)
+    img_h, img_w = gray.shape[:2]
+    thresh = _foreground_threshold(gray, thresh_val, invert=invert)
     k_close = cv2.getStructuringElement(cv2.MORPH_RECT, (25, 25))
     k_open  = cv2.getStructuringElement(cv2.MORPH_RECT, (6, 6))
     closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, k_close)
@@ -52,7 +71,6 @@ def coarse_boxes(gray: np.ndarray, thresh_val: int) -> list[tuple[int, int, int,
     contours, _ = cv2.findContours(opened, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     boxes = []
-    img_h, img_w = gray.shape[:2]
     for cnt in contours:
         area = cv2.contourArea(cnt)
         x, y, bw, bh = cv2.boundingRect(cnt)
@@ -78,7 +96,38 @@ def coarse_boxes(gray: np.ndarray, thresh_val: int) -> list[tuple[int, int, int,
         else:
             boxes.append((x, y, bw, bh))
 
+    boxes.extend(_edge_boxes(gray))
+    boxes = [b for b in boxes if not _is_background_box(b, img_w, img_h)]
+
     return _merge(boxes)
+
+
+def _edge_boxes(gray: np.ndarray) -> list[tuple[int, int, int, int]]:
+    """Дополнительный поиск по границам для смешанного светлого/темного фона."""
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(blur, 40, 120)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 15))
+    closed = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
+    closed = cv2.dilate(closed, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)), iterations=1)
+    contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    boxes = []
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        x, y, bw, bh = cv2.boundingRect(cnt)
+        aspect = bw / bh if bh else 0
+        if area < 100 or bw < 20 or bh < 20 or aspect > 8 or aspect < 0.1:
+            continue
+        boxes.append((x, y, bw, bh))
+    return boxes
+
+
+def _is_background_box(box: tuple[int, int, int, int], img_w: int, img_h: int) -> bool:
+    """Отсекает большие области фона/листа, которые мешают находить отдельные марки."""
+    x, y, bw, bh = box
+    area_ratio = (bw * bh) / float(img_w * img_h)
+    touches_edge = x <= 2 or y <= 2 or x + bw >= img_w - 2 or y + bh >= img_h - 2
+    return area_ratio > 0.55 or (touches_edge and area_ratio > 0.20)
 
 def _merge(boxes, gap=8):
     if not boxes: return []
@@ -101,7 +150,7 @@ def _merge(boxes, gap=8):
 
 
 def precise_rect(gray: np.ndarray, coarse_box: tuple[int, int, int, int], pad: int = 0) -> BoundingBox:
-    """Шаг 2: точный контур по Canny-рёбрам → minAreaRect."""
+    """Шаг 2: точный контур по бинарной маске → minAreaRect."""
     x, y, bw, bh = coarse_box
     ih, iw = gray.shape[:2]
     pad_outer = 25
@@ -133,9 +182,11 @@ def precise_rect(gray: np.ndarray, coarse_box: tuple[int, int, int, int], pad: i
     if cnts:
         cnt = max(cnts, key=cv2.contourArea)
         if cv2.contourArea(cnt) >= 800:
-            hull = cv2.convexHull(cnt)
+            perimeter = cv2.arcLength(cnt, True)
+            epsilon = max(1.0, perimeter * 0.0025)
+            contour = cv2.approxPolyDP(cnt, epsilon, True)
             # Возвращаем координаты обратно (вычитаем паддинг roi_pad и добавляем координаты roi_g на всем скане)
-            cnt_full = hull - np.array([pad_val, pad_val]) + np.array([x1, y1])
+            cnt_full = contour.reshape(-1, 2) - np.array([pad_val, pad_val]) + np.array([x1, y1])
             center, (rw, rh), angle = cv2.minAreaRect(cnt_full)
             # Добавляем минимальный отступ
             return BoundingBox(center, (rw + pad * 2, rh + pad * 2), angle, contour=cnt_full)
@@ -167,7 +218,7 @@ def process_image(
         thresh_val = threshold
 
     # 1. Грубый поиск областей
-    c_boxes = coarse_boxes(gray, thresh_val)
+    c_boxes = coarse_boxes(gray, thresh_val, invert=invert)
     
     # 2. Уточнение каждой области
     results: list[BoundingBox] = []
@@ -196,12 +247,14 @@ def crop_rotated(img: np.ndarray, bbox: BoundingBox) -> np.ndarray:
     # 2. Создание маски контура и применение её к альфа-каналу
     mask = np.zeros((ih, iw), dtype=np.uint8)
     if hasattr(bbox, 'contour') and bbox.contour is not None:
-        cv2.drawContours(mask, [bbox.contour.astype(np.int32)], -1, 255, -1)
+        contour = bbox.contour.reshape(-1, 1, 2).astype(np.int32)
+        cv2.drawContours(mask, [contour], -1, 255, -1)
     else:
         box_points = cv2.boxPoints((center, size, angle))
         cv2.drawContours(mask, [np.int32(box_points)], -1, 255, -1)
         
     img_rgba[:, :, 3] = mask
+    img_rgba[mask == 0] = (0, 0, 0, 0)
     
     # 3. Поворот
     if rh > rw:
@@ -218,7 +271,10 @@ def crop_rotated(img: np.ndarray, bbox: BoundingBox) -> np.ndarray:
     cx, cy = int(center[0]), int(center[1])
     x1=max(cx-int(rw/2),0); y1=max(cy-int(rh/2),0)
     x2=min(cx+int(rw/2),iw); y2=min(cy+int(rh/2),ih)
-    return rotated[y1:y2, x1:x2]
+    cropped = rotated[y1:y2, x1:x2]
+    if cropped.size and cropped.shape[2] == 4:
+        cropped[cropped[:, :, 3] == 0] = (0, 0, 0, 0)
+    return cropped
 
 
 def detect_dark_background(image: np.ndarray) -> bool:

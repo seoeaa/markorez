@@ -304,7 +304,9 @@ class StampCanvas(tk.Canvas):
                 self.drag_box_start = BoundingBox(
                     self.bounding_boxes[self.selected_box_index].center,
                     self.bounding_boxes[self.selected_box_index].size,
-                    self.bounding_boxes[self.selected_box_index].angle
+                    self.bounding_boxes[self.selected_box_index].angle,
+                    contour=(self.bounding_boxes[self.selected_box_index].contour.copy()
+                             if self.bounding_boxes[self.selected_box_index].contour is not None else None)
                 )
                 return
         
@@ -318,7 +320,9 @@ class StampCanvas(tk.Canvas):
                 self.drag_box_start = BoundingBox(
                     self.bounding_boxes[box_idx].center,
                     self.bounding_boxes[box_idx].size,
-                    self.bounding_boxes[box_idx].angle
+                    self.bounding_boxes[box_idx].angle,
+                    contour=(self.bounding_boxes[box_idx].contour.copy()
+                             if self.bounding_boxes[box_idx].contour is not None else None)
                 )
                 self.redraw()
                 return
@@ -393,7 +397,12 @@ class StampCanvas(tk.Canvas):
             new_cx = max(0, min(box.center[0] + delta_x, img_w))
             new_cy = max(0, min(box.center[1] + delta_y, img_h))
             
-            self.bounding_boxes[self.selected_box_index].center = (new_cx, new_cy)
+            current = self.bounding_boxes[self.selected_box_index]
+            current.center = (new_cx, new_cy)
+            if box.contour is not None:
+                move_x = new_cx - box.center[0]
+                move_y = new_cy - box.center[1]
+                current.contour = box.contour.reshape(-1, 2) + np.array([move_x, move_y])
             self.redraw()
             return
         
